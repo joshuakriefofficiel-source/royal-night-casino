@@ -158,14 +158,54 @@ const Sound = (() => {
     src.start(t);
   };
 
+  // ── Sons SOUTENUS (durée variable) — renvoient une fonction stop() ────────
+  // Whirr mécanique de rouleaux de machine à sous (rotation + tic-tic rapides).
+  const reelSpin = (ms = 2000) => {
+    const c = ensure(); if (!c || !sfxOn) return () => {};
+    const t = c.currentTime;
+    const osc = c.createOscillator(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, t);
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 850; bp.Q.value = 4.5;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.06 * sfxVol, t + 0.09);
+    // Trémolo rapide = les crans du rouleau qui défilent.
+    const trem = c.createOscillator(); trem.type = 'square'; trem.frequency.value = 24;
+    const tremAmt = c.createGain(); tremAmt.gain.value = 0.045 * sfxVol;
+    trem.connect(tremAmt).connect(g.gain);
+    osc.connect(bp).connect(g).connect(c.destination);
+    osc.start(t); trem.start(t);
+    let stopped = false;
+    const stop = (fade = 0.14) => {
+      if (stopped) return; stopped = true;
+      const now = c.currentTime;
+      try { g.gain.cancelScheduledValues(now); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), now); g.gain.linearRampToValueAtTime(0.0001, now + fade); } catch (e) {}
+      try { osc.stop(now + fade + 0.03); trem.stop(now + fade + 0.03); } catch (e) {}
+    };
+    const timer = setTimeout(() => stop(0.2), ms);
+    return () => { clearTimeout(timer); stop(0.06); };
+  };
+  // Dés qui roulent/tumbent : petits chocs boisés répétés et aléatoires.
+  const diceTumble = (ms = 1200) => {
+    const c = ensure(); if (!c || !sfxOn) return () => {};
+    let stopped = false;
+    const knock = () => {
+      if (stopped) return;
+      noise(0.045, { vol: 0.12, hp: 350 });
+      tone(150 + Math.random() * 140, 0.05, { type: 'triangle', vol: 0.06 });
+    };
+    knock();
+    const iv = setInterval(() => { if (!stopped && Math.random() < 0.85) knock(); }, 65);
+    const timer = setTimeout(() => { stopped = true; clearInterval(iv); }, ms);
+    return () => { stopped = true; clearInterval(iv); clearTimeout(timer); };
+  };
+
   const sfx = {
     click:   () => tone(520, 0.06, { type: 'triangle', vol: 0.1 }),
     select:  () => { tone(660, 0.05, { vol: 0.11 }); tone(880, 0.07, { vol: 0.09, when: 0.05 }); },
     chip:    () => { noise(0.05, { vol: 0.1, hp: 2000 }); tone(1200, 0.04, { type: 'square', vol: 0.05 }); },
-    card:    () => noise(0.09, { vol: 0.12, hp: 1200 }),
-    dice:    () => { noise(0.12, { vol: 0.16, hp: 600 }); noise(0.1, { vol: 0.12, hp: 900, when: 0.07 }); },
+    card:    () => { noise(0.06, { vol: 0.14, hp: 1600 }); tone(2200, 0.03, { type: 'triangle', vol: 0.04 }); },
+    dice:    () => { noise(0.05, { vol: 0.13, hp: 400 }); tone(170 + Math.random() * 120, 0.05, { type: 'triangle', vol: 0.06 }); },
     lever:   () => tone(200, 0.25, { type: 'sawtooth', vol: 0.12, glideTo: 90 }),
-    reel:    () => tone(440, 0.03, { type: 'square', vol: 0.05 }),
+    reel:    () => { noise(0.02, { vol: 0.05, hp: 3200 }); tone(720, 0.02, { type: 'square', vol: 0.035 }); },
     launch:  () => { tone(330, 0.1, { type: 'triangle', vol: 0.13 }); tone(494, 0.14, { type: 'triangle', vol: 0.11, when: 0.09 }); },
     win:     () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, { type: 'triangle', vol: 0.15, when: i * 0.1 })),
     jackpot: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.4, { type: 'square', vol: 0.13, when: i * 0.09 })),
@@ -274,8 +314,27 @@ const Sound = (() => {
     }
   };
 
+  // ── Coupure temporaire de la musique pendant une action de jeu ────────────
+  let ducked = false, duckWasFile = false;
+  const duck = () => {
+    if (ducked) return; ducked = true;
+    duckWasFile = !!(usingFile && musicEl && !musicEl.paused);
+    if (musicEl && !musicEl.paused) { try { musicEl.pause(); } catch (e) {} }
+    if (musicNodes && ctx) { try { musicNodes.master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.06); } catch (e) {} }
+  };
+  const unduck = () => {
+    if (!ducked) return; ducked = false;
+    if (!musicOn) return;
+    if (duckWasFile && musicEl) { const p = musicEl.play(); if (p && p.catch) p.catch(() => {}); }
+    else if (musicNodes && ctx) { try { musicNodes.master.gain.setTargetAtTime(Math.max(0.0001, musVol), ctx.currentTime, 0.4); } catch (e) {} }
+    else { startMusic(); }
+  };
+
   return {
     play: (name) => { if (sfx[name]) sfx[name](); },
+    reelSpin: (ms) => reelSpin(ms),
+    diceTumble: (ms) => diceTumble(ms),
+    duck, unduck,
     toggleMusic() { musicOn = !musicOn; musicOn ? startMusic() : stopMusic(); return musicOn; },
     toggleSfx() { sfxOn = !sfxOn; if (sfxOn) sfx.select(); return sfxOn; },
     get musicOn() { return musicOn; },
@@ -886,11 +945,13 @@ const DiceGame = (() => {
     [els.p1, els.p2, els.h1, els.h2].forEach((d) => d.classList.add('rolling'));
     els.pT.textContent = els.hT.textContent = '—';
 
+    Sound.duck();                                  // coupe la musique le temps du lancer
+    const stopDice = Sound.diceTumble(1300);       // dés qui roulent
     for (let i = 0; i < 9; i++) {
-      Sound.play('dice');
       [els.p1, els.p2, els.h1, els.h2].forEach((d) => d.textContent = '⚀⚁⚂⚃⚄⚅'[randInt(0, 5)]);
       await wait(90 + i * 12);
     }
+    stopDice();
 
     const faces = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
     const p = [randInt(1, 6), randInt(1, 6)];
@@ -921,6 +982,7 @@ const DiceGame = (() => {
       Sound.play('tie'); UI.toast('Égalité — mise remboursée');
     }
     Bank.record(net, 'Dés');
+    await wait(450); Sound.unduck();               // la musique revient après le résultat
     busy = false; els.btn.disabled = false;
   };
 
@@ -988,6 +1050,7 @@ const Blackjack = (() => {
     const s = bet.read(); if (s === null) return;
     if (!Bank.placeBet(s)) { UI.toast('Mise refusée.', 'lose'); return; }
     stake = s; doubled = false; busy = true;
+    Sound.duck();                                  // musique coupée pendant la main
     els.deal.disabled = true; els.banner.textContent = ''; els.banner.className = 'bj-banner';
 
     deck = Cards.shuffle(Cards.freshDeck());
@@ -1070,6 +1133,7 @@ const Blackjack = (() => {
     UI.toast(msg.replace(/\s+/g, ' '), net > 0 ? 'win' : net < 0 ? 'lose' : '');
     Bank.record(net, 'Blackjack');
     phase = 'idle';
+    await wait(500); Sound.unduck();               // la musique revient à la fin de la main
   };
 
   return { init };
@@ -1170,6 +1234,7 @@ const Poker = (() => {
     if (busy) return;
     if (Bank.balance < BIG) { UI.toast('Solde insuffisant pour vous asseoir (min. ' + fmt(BIG) + ').', 'lose'); return; }
     busy = true; els.newBtn.disabled = true;
+    Sound.duck();                                  // musique coupée pendant la main
     Bank.countGame();
 
     deck = Cards.shuffle(Cards.freshDeck());
@@ -1385,6 +1450,7 @@ const Poker = (() => {
     else UI.toast('Main nulle pour vous');
 
     await wait(400);
+    Sound.unduck();                                // la musique revient à la fin de la main
     els.newBtn.disabled = false;
     busy = false;
   };
@@ -1475,7 +1541,9 @@ const Slot = (() => {
     els.spinBtn.disabled = true;
     els.readout.textContent = 'Les rouleaux tournent…'; els.readout.className = 'slot-readout';
     els.lever.classList.add('pulled');
+    Sound.duck();                                  // coupe la musique le temps du tirage
     Sound.play('lever'); await wait(180); Sound.play('launch');
+    const stopReel = Sound.reelSpin(2700);         // whirr des rouleaux qui tournent
 
     // Tire les 3 symboles finaux
     // Tirage piloté par les taux visés (proportionnels : plus le lot est gros,
@@ -1510,6 +1578,7 @@ const Slot = (() => {
       spinReel(reels[1], result[1], 1900),
       spinReel(reels[2], result[2], 2400),
     ]);
+    stopReel();                                    // arrêt du whirr quand les rouleaux se figent
 
     els.lever.classList.remove('pulled');
     await wait(150);
@@ -1549,6 +1618,7 @@ const Slot = (() => {
     }
 
     Bank.record(net, 'Machine');
+    await wait(450); Sound.unduck();               // la musique revient après le résultat
     busy = false;
     els.spinBtn.disabled = false;
   };
@@ -3113,7 +3183,7 @@ const SlotSelect = (() => {
     if (vehicle) { Concession.select(vehicle.dataset.vehicle); }
     else if (estate) { AgenceImmo.select(estate.dataset.estate); }
     else if (deal) { VenteLocation.select(deal.dataset.deal); }
-    else if (nav) { Nav.go(nav.dataset.nav); }
+    else if (nav) { Sound.unduck(); Nav.go(nav.dataset.nav); }
     else if (game) {
       const g = game.dataset.game;
       if (!Bank.isGameUnlocked(g)) { Sound.play('lose'); UI.toast(`🔒 ${gameLabel(g)} se débloque au niveau ${Bank.unlockLevel(g)}.`, 'lose'); return; }
