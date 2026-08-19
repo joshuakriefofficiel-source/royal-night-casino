@@ -290,6 +290,25 @@ const Sound = (() => {
     setSfxVolume(x) { sfxVol = clamp(x, 0, 1); },
     kick: () => ensure(),
     ensureMusic: () => { if (musicOn) startMusic(); },
+    // Coupe TOUT le son et libère l'AudioContext (à l'abandon d'une page)
+    // → empêche une « page fantôme » de continuer à jouer après un refresh.
+    shutdown: () => {
+      try { stopMusic(); } catch (e) {}
+      if (musicEl) { try { musicEl.pause(); } catch (e) {} }
+      if (ctx) { try { ctx.close(); } catch (e) {} ctx = null; }
+    },
+    get musicStatus() {
+      return {
+        musicOn,
+        usingFile,
+        synthPlaying: !!musicNodes,
+        fileReady: musicElReady,
+        fileFailed: musicFileFailed,
+        fileSrc: musicEl ? musicEl.currentSrc || musicEl.src : null,
+        fileReadyState: musicEl ? musicEl.readyState : null,
+        filePaused: musicEl ? musicEl.paused : null,
+      };
+    },
   };
 })();
 
@@ -3111,6 +3130,12 @@ const SlotSelect = (() => {
   const unlock = () => { Sound.kick(); Sound.ensureMusic(); updateAudioBtns(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
   window.addEventListener('pointerdown', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: false });
+  // Quitte/rafraîchit la page → on coupe tout le son pour éviter une
+  // « page fantôme » qui continuerait à jouer par-dessus la nouvelle.
+  window.addEventListener('pagehide', () => { try { Sound.shutdown(); } catch (e) {} });
+  window.addEventListener('beforeunload', () => { try { Sound.shutdown(); } catch (e) {} });
+  // Retour via le cache d'historique (bouton précédent) → on relance si besoin.
+  window.addEventListener('pageshow', (e) => { if (e.persisted) Sound.ensureMusic(); });
 
   // Boutons audio
   const musicBtn = $('#musicBtn'), sfxBtn = $('#sfxBtn');

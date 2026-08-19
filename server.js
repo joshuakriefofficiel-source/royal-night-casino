@@ -35,7 +35,13 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end('Forbidden'); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('404 — introuvable'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream' });
+    const ext = path.extname(file).toLowerCase();
+    const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+    // Le code (html/js/css) n'est jamais mis en cache → toujours la dernière
+    // version après un simple rafraîchissement. Les médias peuvent être cachés.
+    if (['.html', '.js', '.css', '.json'].includes(ext)) headers['Cache-Control'] = 'no-store, must-revalidate';
+    else headers['Cache-Control'] = 'public, max-age=86400';
+    res.writeHead(200, headers);
     res.end(data);
   });
 });
