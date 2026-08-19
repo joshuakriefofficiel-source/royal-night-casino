@@ -590,6 +590,11 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .duo-goal-sub{font-size:.72rem;color:var(--txt-dim);margin-top:.3rem;font-variant-numeric:tabular-nums}
 @media(prefers-reduced-motion:reduce){.duo-bar-fill{transition:none}}
 
+/* Badge de version (repère de cache) */
+.ver-badge{position:fixed;right:8px;bottom:6px;z-index:60;font-family:var(--font-ui);font-size:.68rem;
+  letter-spacing:.04em;color:rgba(217,180,91,.55);background:rgba(10,10,13,.55);
+  padding:.15rem .45rem;border-radius:8px;border:1px solid rgba(217,180,91,.18);pointer-events:none;user-select:none}
+
 /* ─────────── SÉLECTION DES SAUVEGARDES ─────────── */
 .slot-select{position:fixed;inset:0;z-index:195;display:grid;place-items:center;padding:1.4rem;overflow-y:auto;
   background:radial-gradient(circle at 50% 25%,#171310,#050506);animation:viewIn .5s ease}

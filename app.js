@@ -7,6 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
+const APP_VERSION = '61';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2859,7 +2860,7 @@ const Multiplayer = (() => {
     modal = $('#mp');
     $('#mpClose').addEventListener('click', close);
     $('#mpHost').addEventListener('click', host);
-    $('#mpJoinBtn').addEventListener('click', () => { screen('join'); setTimeout(() => $('#mpCodeInput input')[0].focus(), 50); });
+    $('#mpJoinBtn').addEventListener('click', () => { screen('join'); setTimeout(() => { const f = $$('#mpCodeInput input')[0]; if (f) f.focus(); }, 50); });
     $('#mpBack').addEventListener('click', () => screen('menu'));
     $('#mpJoinGo').addEventListener('click', join);
     $('#mpReady').addEventListener('click', ready);
@@ -3215,6 +3216,7 @@ const SlotSelect = (() => {
     sfxBtn.textContent = Sound.sfxOn ? '🔊' : '🔇';
     sfxBtn.classList.toggle('off', !Sound.sfxOn);
   };
+  const verBadge = $('#verBadge'); if (verBadge) verBadge.textContent = 'v' + APP_VERSION;
   musicBtn.addEventListener('click', () => { Sound.toggleMusic(); updateAudioBtns(); UI.toast(Sound.musicOn ? 'Musique activée' : 'Musique en pause'); });
   sfxBtn.addEventListener('click', () => { Sound.toggleSfx(); updateAudioBtns(); UI.toast(Sound.sfxOn ? 'Effets sonores activés' : 'Effets sonores coupés'); });
   updateAudioBtns();
