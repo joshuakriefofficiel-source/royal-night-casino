@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '61';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '62';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -3217,6 +3217,7 @@ const SlotSelect = (() => {
     sfxBtn.classList.toggle('off', !Sound.sfxOn);
   };
   const verBadge = $('#verBadge'); if (verBadge) verBadge.textContent = 'v' + APP_VERSION;
+  console.log('%c🎰 Royal Night Casino — version ' + APP_VERSION, 'color:#d9b45b;font-weight:bold;font-size:14px');
   musicBtn.addEventListener('click', () => { Sound.toggleMusic(); updateAudioBtns(); UI.toast(Sound.musicOn ? 'Musique activée' : 'Musique en pause'); });
   sfxBtn.addEventListener('click', () => { Sound.toggleSfx(); updateAudioBtns(); UI.toast(Sound.sfxOn ? 'Effets sonores activés' : 'Effets sonores coupés'); });
   updateAudioBtns();
