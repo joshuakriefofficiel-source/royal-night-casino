@@ -81,6 +81,7 @@ const Sound = (() => {
   let musicEl = null;          // HTMLAudioElement si un fichier existe
   let musicElReady = false;    // true = fichier chargé et utilisable
   let usingFile = false;
+  let musicFileFailed = false;   // true = aucune source lisible → repli synthé
 
   /** Prépare l'élément <audio> ; bascule musicElReady si un fichier charge. */
   const initMusicFile = () => {
@@ -91,7 +92,12 @@ const Sound = (() => {
     musicEl.volume = 0.55;
     let srcIdx = 0;
     const tryNext = () => {
-      if (srcIdx >= MUSIC_SOURCES.length) { musicElReady = false; return; }
+      if (srcIdx >= MUSIC_SOURCES.length) {
+        // Aucune source lisible : on autorise (enfin) l'ambiance synthétisée.
+        musicElReady = false; musicFileFailed = true;
+        if (musicOn && !usingFile) startSynth();
+        return;
+      }
       musicEl.src = encodeURI(MUSIC_SOURCES[srcIdx++]);
       musicEl.load();
     };
@@ -169,15 +175,21 @@ const Sound = (() => {
 
   const startMusic = () => {
     if (!musicOn) return;
-    // 1) Priorité au fichier audio (le morceau demandé) s'il est disponible.
+    // Priorité ABSOLUE au fichier audio (ta chanson « Midnight Velvet »).
     initMusicFile();
+    if (musicFileFailed) { startSynth(); return; }   // secours seulement si aucun fichier
     if (musicEl && (musicElReady || musicEl.readyState >= 2)) {
       usingFile = true;
       const p = musicEl.play();
       if (p && p.catch) p.catch(() => { /* autoplay bloqué : réessai au prochain geste */ });
-      return;
     }
-    // 2) Repli : ambiance lounge nocturne générée en direct (immersive, feutrée).
+    // Sinon : le fichier charge encore → on attend « canplaythrough » qui lancera
+    // la chanson. On ne démarre PAS le synthé (évite la superposition des 2 musiques).
+  };
+
+  // Ambiance lounge nocturne générée en direct — uniquement en secours.
+  const startSynth = () => {
+    if (!musicOn) return;
     const c = ensure(); if (!c || musicNodes) return;
 
     // Chaîne maître : passe-bas chaleureux + écho spatial + fondu d'entrée.
