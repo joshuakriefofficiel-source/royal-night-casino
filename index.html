@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0c">
+<title>Royal Night Casino</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=49">
+</head>
+<body>
+
+<!-- ══════════════════ ÉCRAN DE CHARGEMENT ══════════════════ -->
+<div id="loader" class="loader">
+  <div class="loader-inner">
+    <div class="loader-crest">♠</div>
+    <h1 class="loader-title">ROYAL&nbsp;NIGHT</h1>
+    <p class="loader-sub">C&nbsp;A&nbsp;S&nbsp;I&nbsp;N&nbsp;O</p>
+    <div class="loader-bar"><span></span></div>
+    <p class="loader-text">Chargement de la salle…</p>
+  </div>
+</div>
+
+<!-- ══════════════════ PARTICULES DORÉES ══════════════════ -->
+<canvas id="particles" aria-hidden="true"></canvas>
+
+<!-- ══════════════════ BARRE DE NAVIGATION ══════════════════ -->
+<header id="navbar" class="navbar hidden">
+  <div class="nav-left">
+    <button class="brand" data-nav="home" aria-label="Retour à l'accueil">
+      <span class="brand-mark">♠</span>
+      <span class="brand-name">Royal&nbsp;Night</span>
+    </button>
+  </div>
+  <nav class="nav-links" aria-label="Navigation principale">
+    <button class="nav-link" data-nav="home" data-i18n="nav.accueil">Accueil</button>
+    <button class="nav-link" data-nav="casino" data-i18n="nav.casino">Casino</button>
+    <button class="nav-link" data-nav="concession" data-modecat="commerce" data-i18n="nav.concession">Concession</button>
+    <button class="nav-link" data-nav="importexport" data-modecat="commerce" data-i18n="nav.importexport">Import / Export</button>
+    <button class="nav-link" data-nav="agence" data-modecat="immobilier" data-i18n="nav.agence" hidden>Agence</button>
+    <button class="nav-link" data-nav="ventelocation" data-modecat="immobilier" data-i18n="nav.ventelocation" hidden>Vente &amp; loc.</button>
+    <button class="nav-link" data-nav="profile" data-i18n="nav.profil">Profil</button>
+  </nav>
+  <div class="nav-right">
+    <div class="level-pill" id="navLevel" title="Niveau du joueur">
+      <span class="lvl-badge">Niv.&nbsp;<b id="navLevelNum">1</b></span>
+      <span class="lvl-bar"><i id="navXpFill"></i></span>
+    </div>
+    <div class="balance-pill" id="navBalance" title="Monnaie virtuelle fictive">
+      <span class="chip-ico">🪙</span>
+      <span class="balance-val" id="navBalanceVal">500</span>
+    </div>
+    <div class="audio-controls">
+      <button class="ico-btn" id="musicBtn" aria-label="Musique" title="Musique">🎵</button>
+      <button class="ico-btn" id="sfxBtn" aria-label="Effets sonores" title="Effets sonores">🔊</button>
+      <button class="ico-btn" id="settingsBtn" aria-label="Paramètres" title="Paramètres">⚙️</button>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════ CONTENU ══════════════════ -->
+<main id="app">
+
+  <!-- ─────────── PAGE : ACCUEIL ─────────── -->
+  <section id="view-home" class="view active">
+    <div class="home-wrap">
+      <div class="home-tag" data-i18n="home.tag">✦ Établissement privé ✦</div>
+      <h1 class="home-title">ROYAL&nbsp;NIGHT<br><span>CASINO</span></h1>
+      <p class="home-sub" data-i18n="home.sub">Entrez dans l'univers du jeu.</p>
+      <button class="btn-casino" data-nav="casino">
+        <span class="btn-casino-ico">🎰</span>
+        <span data-i18n="home.enter">ENTRER AU CASINO</span>
+      </button>
+      <p class="home-note" data-i18n="home.note">Monnaie virtuelle fictive — aucun argent réel, aucun gain retirable.</p>
+      <div class="home-stats">
+        <div class="hstat"><b>4</b><span>Jeux de table</span></div>
+        <div class="hstat"><b>24/7</b><span>Ouvert</span></div>
+        <div class="hstat"><b>VIP</b><span>Accès illimité</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── PAGE : CASINO (choix des jeux) ─────────── -->
+  <section id="view-casino" class="view">
+    <div class="casino-hall">
+      <div class="hall-head">
+        <button class="back-link" data-nav="home">← Menu principal</button>
+        <h2 class="hall-title" data-i18n="casino.title">Casino Royal</h2>
+        <p class="hall-sub" data-i18n="casino.sub">Choisissez votre table</p>
+      </div>
+      <div class="wheel-cta">
+        <button class="wheel-btn" id="wheelBtn">🎡 Roue quotidienne <span class="wheel-badge" id="wheelBadge"></span></button>
+      </div>
+      <div class="games-grid">
+        <button class="game-card" data-game="dice">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🎲</div>
+          <h3>Dés</h3>
+          <p>Lancez deux dés contre la maison. Le plus grand total l'emporte.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="blackjack">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🃏</div>
+          <h3>Blackjack</h3>
+          <p>Approchez 21 sans le dépasser. Le croupier suit les règles classiques.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="poker">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">♠</div>
+          <h3>Poker</h3>
+          <p>Texas Hold'em contre trois adversaires. Bluffez et ramassez le pot.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="slot">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🎰</div>
+          <h3>Machine à rouleaux</h3>
+          <p>Tirez le levier. Trois symboles identiques et le jackpot est à vous.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── PAGE : PROFIL ─────────── -->
+  <section id="view-profile" class="view">
+    <div class="profile-wrap">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="hall-title">Profil du joueur</h2>
+      <div class="profile-grid">
+        <div class="profile-card balance-card">
+          <span class="pc-label">Solde actuel</span>
+          <span class="pc-balance"><i>🪙</i><b id="profileBalance">500</b></span>
+          <span class="pc-note">crédits virtuels fictifs</span>
+          <span class="pc-company" id="profileCompany"></span>
+          <button class="btn-primary rescue-btn hidden" id="rescueBtn">🆘 Recharge de secours</button>
+          <button class="btn-ghost danger" id="resetBtn">Réinitialiser le compte</button>
+        </div>
+        <div class="profile-card history-card">
+          <span class="pc-label">Historique récent</span>
+          <ul class="history-list" id="historyList">
+            <li class="hist-empty">Aucune transaction pour l'instant.</li>
+          </ul>
+        </div>
+        <div class="profile-card level-card">
+          <span class="pc-label">Niveau</span>
+          <div class="level-big"><span class="lvl-ring" id="profileLevelRing"><b id="profileLevel">1</b></span></div>
+          <div class="xp-bar"><i id="profileXpFill"></i></div>
+          <span class="xp-text" id="profileXpText">0 / 50 XP</span>
+          <span class="pc-note">Chaque niveau demande plus d'expérience que le précédent.</span>
+        </div>
+        <div class="profile-card stats-card">
+          <span class="pc-label">Statistiques</span>
+          <div class="stat-row"><span>Parties jouées</span><b id="statGames">0</b></div>
+          <div class="stat-row"><span>Victoires</span><b id="statWins">0</b></div>
+          <div class="stat-row"><span>Plus gros gain</span><b id="statBig">0</b></div>
+        </div>
+        <div class="profile-card auto-card" id="autoCard"></div>
+        <div class="profile-card garage-card">
+          <span class="pc-label">🏬 Mon Garage <small class="garage-count" id="garageCount"></small></span>
+          <div class="garage-grid" id="garageGrid"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── PAGE : CONCESSION ─────────── -->
+  <section id="view-concession" class="view">
+    <div class="concession-wrap">
+      <div class="hall-head">
+        <button class="back-link" data-nav="casino">← Retour au Casino</button>
+        <h2 class="hall-title">La&nbsp;Concession</h2>
+        <p class="hall-sub">Choisissez une catégorie de véhicule</p>
+      </div>
+      <div class="games-grid concession-grid">
+        <button class="game-card vehicle-card" data-vehicle="velo">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🚲</div>
+          <h3>Vélo</h3>
+          <p>Deux roues d'exception, du vélo de ville chic aux modèles de course en carbone.</p>
+          <span class="gc-play">Découvrir →</span>
+        </button>
+        <button class="game-card vehicle-card" data-vehicle="bateau">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">⛵</div>
+          <h3>Bateau</h3>
+          <p>Prenez le large : vedettes, voiliers et yachts pour les nuits sur l'eau.</p>
+          <span class="gc-play">Découvrir →</span>
+        </button>
+        <button class="game-card vehicle-card" data-vehicle="avion">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">✈️</div>
+          <h3>Avion</h3>
+          <p>Le luxe en altitude : jets privés et avions légers pour rejoindre les grandes tables.</p>
+          <span class="gc-play">Découvrir →</span>
+        </button>
+        <button class="game-card vehicle-card" data-vehicle="voiture">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🚗</div>
+          <h3>Voiture</h3>
+          <p>Bolides et grandes routières : l'élégance à quatre roues, du coupé GT à la limousine.</p>
+          <span class="gc-play">Découvrir →</span>
+        </button>
+      </div>
+      <div class="concession-detail" id="concessionDetail" hidden></div>
+    </div>
+  </section>
+
+  <!-- ─────────── PAGE : IMPORT / EXPORT ─────────── -->
+  <section id="view-importexport" class="view">
+    <div class="ie-wrap">
+      <div class="hall-head">
+        <button class="back-link" data-nav="casino">← Retour au Casino</button>
+        <h2 class="hall-title">Import&nbsp;/&nbsp;Export</h2>
+        <p class="hall-sub" id="ieOrigin">Depuis : —</p>
+      </div>
+
+      <div class="ie-partner">
+        <label class="ie-lbl">Pays partenaire (tous les pays du monde)</label>
+        <div class="ie-search-wrap">
+          <input id="iePartnerSearch" class="ie-input" type="search" autocomplete="off" placeholder="🔍 Choisir un pays…">
+          <div id="iePartnerSuggest" class="ob-suggest" hidden></div>
+        </div>
+        <div class="ie-route" id="ieRoute" hidden></div>
+      </div>
+
+      <div class="ie-tabs">
+        <button class="ie-tab active" data-tab="export">📤 Exporter mes véhicules</button>
+      </div>
+
+      <div class="ie-cats" id="ieCats"></div>
+
+      <div class="ie-goods" id="ieGoods"></div>
+
+      <div class="ie-cols">
+        <div class="ie-panel">
+          <h3 class="ie-panel-h">🏬 Entrepôt</h3>
+          <div class="ie-stocks" id="ieWarehouse"></div>
+        </div>
+        <div class="ie-panel">
+          <h3 class="ie-panel-h">🚚 Expéditions en cours</h3>
+          <div id="ieShipments"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── PAGE : AGENCE IMMOBILIÈRE ─────────── -->
+  <section id="view-agence" class="view">
+    <div class="concession-wrap">
+      <div class="hall-head">
+        <button class="back-link" data-nav="casino">← Retour au Casino</button>
+        <h2 class="hall-title">Agence&nbsp;immobilière</h2>
+        <p class="hall-sub">Investissez dans la pierre</p>
+      </div>
+      <div class="games-grid concession-grid">
+        <button class="game-card vehicle-card" data-estate="maisons">
+          <div class="gc-glow"></div><div class="gc-ico">🏡</div>
+          <h3>Maisons</h3>
+          <p>Villas, chalets et hôtels particuliers d'exception à travers le monde.</p>
+          <span class="gc-play">Découvrir →</span>
+        </button>
+        <button class="game-card vehicle-card" data-estate="immeubles">
+          <div class="gc-glow"></div><div class="gc-ico">🏢</div>
+          <h3>Immeubles</h3>
+          <p>Immeubles de rapport et tours de bureaux : la pierre qui travaille pour vous.</p>
+          <span class="gc-play">Découvrir →</span>
+        </button>
+        <button class="game-card vehicle-card" data-estate="monuments">
+          <div class="gc-glow"></div><div class="gc-ico">🏛️</div>
+          <h3>Monuments &amp; Luxe</h3>
+          <p>Châteaux classés, palais et biens de collection pour une élite.</p>
+          <span class="gc-play">Découvrir →</span>
+        </button>
+      </div>
+      <div class="concession-detail" id="agenceDetail" hidden></div>
+    </div>
+  </section>
+
+  <!-- ─────────── PAGE : VENTE & LOCATION ─────────── -->
+  <section id="view-ventelocation" class="view">
+    <div class="concession-wrap">
+      <div class="hall-head">
+        <button class="back-link" data-nav="casino">← Retour au Casino</button>
+        <h2 class="hall-title">Vente&nbsp;&amp;&nbsp;location</h2>
+        <p class="hall-sub">Faites fructifier votre patrimoine</p>
+      </div>
+      <div class="games-grid ie-grid">
+        <button class="game-card ie-card" data-deal="vente">
+          <div class="gc-glow"></div><div class="gc-ico">💰</div>
+          <h3>Vente</h3>
+          <p>Revendez vos biens à la plus-value : le bon acheteur, au bon moment.</p>
+          <span class="gc-play">Ouvrir →</span>
+        </button>
+        <button class="game-card ie-card" data-deal="location">
+          <div class="gc-glow"></div><div class="gc-ico">🔑</div>
+          <h3>Location</h3>
+          <p>Louez à des particuliers et encaissez des loyers réguliers.</p>
+          <span class="gc-play">Ouvrir →</span>
+        </button>
+      </div>
+      <div class="concession-detail" id="venteDetail" hidden></div>
+    </div>
+  </section>
+
+  <!-- ─────────── JEU : DÉS ─────────── -->
+  <section id="view-dice" class="view game-view">
+    <div class="dice-backdrop" aria-hidden="true">
+      <svg viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bgGlow" cx="50%" cy="8%" r="75%">
+            <stop offset="0%" stop-color="#5a1220" stop-opacity=".9"/>
+            <stop offset="55%" stop-color="#2a0a10" stop-opacity=".85"/>
+            <stop offset="100%" stop-color="#08080a"/>
+          </radialGradient>
+          <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f4dfa0"/>
+            <stop offset="100%" stop-color="#a9862f"/>
+          </linearGradient>
+          <radialGradient id="spot" cx="50%" cy="0%" r="60%">
+            <stop offset="0%" stop-color="#f4dfa0" stop-opacity=".28"/>
+            <stop offset="100%" stop-color="#f4dfa0" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <!-- Fond velours -->
+        <rect width="1200" height="700" fill="url(#bgGlow)"/>
+        <!-- Projecteurs dorés -->
+        <polygon points="600,0 380,700 820,700" fill="url(#spot)"/>
+        <polygon points="180,0 60,700 360,700" fill="url(#spot)" opacity=".5"/>
+        <polygon points="1020,0 840,700 1140,700" fill="url(#spot)" opacity=".5"/>
+        <!-- Rayons art-déco derrière l'arche -->
+        <g stroke="url(#goldGrad)" stroke-width="2" opacity=".18">
+          <line x1="600" y1="140" x2="600" y2="-40"/>
+          <line x1="600" y1="140" x2="440" y2="-10"/>
+          <line x1="600" y1="140" x2="760" y2="-10"/>
+          <line x1="600" y1="140" x2="300" y2="40"/>
+          <line x1="600" y1="140" x2="900" y2="40"/>
+        </g>
+        <!-- Arche enseigne CASINO avec ampoules -->
+        <path d="M 360 200 A 240 200 0 0 1 840 200" fill="none" stroke="url(#goldGrad)" stroke-width="6" opacity=".85"/>
+        <g fill="#f4dfa0">
+          <circle cx="372" cy="182" r="5"/><circle cx="420" cy="132" r="5"/><circle cx="486" cy="98" r="5"/>
+          <circle cx="600" cy="86" r="5"/><circle cx="714" cy="98" r="5"/><circle cx="780" cy="132" r="5"/><circle cx="828" cy="182" r="5"/>
+        </g>
+        <text x="600" y="176" text-anchor="middle" font-family="Cinzel, serif" font-weight="700"
+              font-size="52" letter-spacing="14" fill="url(#goldGrad)" opacity=".9">CASINO</text>
+        <!-- Colonnes art-déco -->
+        <g fill="url(#goldGrad)" opacity=".12">
+          <rect x="70" y="230" width="26" height="470"/><rect x="60" y="220" width="46" height="16"/>
+          <rect x="1104" y="230" width="26" height="470"/><rect x="1094" y="220" width="46" height="16"/>
+        </g>
+        <!-- Roue de roulette (gauche) -->
+        <g transform="translate(190,470)" opacity=".5">
+          <circle r="118" fill="none" stroke="url(#goldGrad)" stroke-width="4"/>
+          <circle r="92" fill="none" stroke="url(#goldGrad)" stroke-width="2" opacity=".7"/>
+          <circle r="34" fill="none" stroke="url(#goldGrad)" stroke-width="3"/>
+          <g stroke="url(#goldGrad)" stroke-width="2" opacity=".6">
+            <line x1="0" y1="-118" x2="0" y2="118"/><line x1="-118" y1="0" x2="118" y2="0"/>
+            <line x1="-83" y1="-83" x2="83" y2="83"/><line x1="83" y1="-83" x2="-83" y2="83"/>
+          </g>
+        </g>
+        <!-- Éventail de jetons (droite) -->
+        <g transform="translate(1010,500)" opacity=".5">
+          <circle cx="0" cy="0" r="46" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-dasharray="10 8"/>
+          <circle cx="-30" cy="18" r="46" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-dasharray="10 8" opacity=".7"/>
+          <circle cx="30" cy="18" r="46" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-dasharray="10 8" opacity=".7"/>
+        </g>
+        <!-- Enseignes de cartes discrètes -->
+        <g fill="url(#goldGrad)" opacity=".14" font-family="serif" font-size="60">
+          <text x="330" y="640">♠</text><text x="470" y="670">♥</text>
+          <text x="720" y="670">♦</text><text x="860" y="640">♣</text>
+        </g>
+      </svg>
+    </div>
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🎲 Dés</h2>
+    </div>
+    <div class="dice-table felt">
+      <div class="dice-side dice-house">
+        <span class="dice-label">La Maison</span>
+        <div class="dice-pair"><div class="die" id="hDie1">?</div><div class="die" id="hDie2">?</div></div>
+        <span class="dice-total" id="hTotal">—</span>
+      </div>
+      <div class="dice-vs" id="diceVs">VS</div>
+      <div class="dice-side dice-player">
+        <span class="dice-label">Vous</span>
+        <div class="dice-pair"><div class="die" id="pDie1">?</div><div class="die" id="pDie2">?</div></div>
+        <span class="dice-total" id="pTotal">—</span>
+      </div>
+    </div>
+    <div class="dice-result" id="diceResult"></div>
+    <div class="bet-dock" id="diceBetDock"></div>
+    <button class="btn-primary big" id="diceRollBtn">LANCER LES DÉS</button>
+  </section>
+
+  <!-- ─────────── JEU : BLACKJACK ─────────── -->
+  <section id="view-blackjack" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🃏 Blackjack</h2>
+    </div>
+    <div class="bj-table felt">
+      <div class="bj-zone">
+        <div class="bj-zone-head"><span>CROUPIER</span><span class="bj-score" id="bjDealerScore"></span></div>
+        <div class="hand" id="bjDealerHand"></div>
+      </div>
+      <div class="bj-banner" id="bjBanner"></div>
+      <div class="bj-zone">
+        <div class="bj-zone-head"><span>JOUEUR</span><span class="bj-score" id="bjPlayerScore"></span></div>
+        <div class="hand" id="bjPlayerHand"></div>
+      </div>
+    </div>
+    <div class="bj-actions" id="bjActions">
+      <button class="btn-action" id="bjHit" disabled>TIRER</button>
+      <button class="btn-action" id="bjStand" disabled>RESTER</button>
+      <button class="btn-action" id="bjDouble" disabled>DOUBLER</button>
+    </div>
+    <div class="bet-dock" id="bjBetDock"></div>
+    <button class="btn-primary big" id="bjDealBtn">DISTRIBUER</button>
+  </section>
+
+  <!-- ─────────── JEU : POKER ─────────── -->
+  <section id="view-poker" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">♠ Poker — Texas Hold'em</h2>
+    </div>
+    <div class="poker-table felt">
+      <div class="poker-seats" id="pokerSeats"></div>
+      <div class="poker-center">
+        <div class="poker-pot">POT<b id="pokerPot">0</b></div>
+        <div class="community" id="pokerCommunity"></div>
+        <div class="poker-stage" id="pokerStage">Appuyez sur « Nouvelle main »</div>
+      </div>
+    </div>
+    <div class="poker-actions" id="pokerActions">
+      <button class="btn-action" id="pkCheck" disabled>CHECK</button>
+      <button class="btn-action" id="pkCall" disabled>CALL</button>
+      <button class="btn-action" id="pkRaise" disabled>RELANCER</button>
+      <button class="btn-action danger" id="pkFold" disabled>SE COUCHER</button>
+      <button class="btn-action allin" id="pkAllin" disabled>ALL-IN</button>
+    </div>
+    <div class="poker-raise" id="pokerRaiseRow" hidden>
+      <input type="range" id="pokerRaiseSlider" min="0" max="100" value="0">
+      <span class="raise-amt">Relance : <b id="pokerRaiseAmt">0</b></span>
+      <button class="btn-primary" id="pokerRaiseConfirm">Confirmer</button>
+      <button class="btn-ghost" id="pokerRaiseCancel">Annuler</button>
+    </div>
+    <div class="bet-dock" id="pokerBetDock"></div>
+    <button class="btn-primary big" id="pokerNewBtn">NOUVELLE MAIN</button>
+  </section>
+
+  <!-- ─────────── JEU : MACHINE À ROULEAUX ─────────── -->
+  <section id="view-slot" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🎰 Machine à rouleaux</h2>
+    </div>
+    <div class="slot-machine">
+      <div class="slot-cabinet">
+        <div class="slot-marquee">ROYAL&nbsp;SPIN</div>
+        <div class="slot-window">
+          <div class="reel" id="reel0"><div class="reel-strip"></div></div>
+          <div class="reel" id="reel1"><div class="reel-strip"></div></div>
+          <div class="reel" id="reel2"><div class="reel-strip"></div></div>
+          <div class="slot-line"></div>
+        </div>
+        <div class="slot-readout" id="slotReadout">Placez une mise et tirez le levier</div>
+      </div>
+      <div class="slot-lever" id="slotLever" role="button" tabindex="0" aria-label="Tirer le levier">
+        <div class="lever-track"><div class="lever-knob"></div></div>
+        <span class="lever-cap">PULL</span>
+      </div>
+    </div>
+    <div class="slot-paytable">
+      <span>💎💎💎 ×2,5</span><span>🪙🪙🪙 ×1,5</span><span>3 identiques ×1</span><span>paire 🪙/💎 ×0,8</span><span>toute paire ×0,35</span>
+    </div>
+    <div class="bet-dock" id="slotBetDock"></div>
+    <button class="btn-primary big" id="slotSpinBtn">TIRER LE LEVIER</button>
+  </section>
+
+</main>
+
+<!-- ══════════════════ ONBOARDING (premier lancement) ══════════════════ -->
+<div id="onboarding" class="onboarding hidden">
+  <div class="ob-card">
+
+    <!-- Étape 1 : nom de l'entreprise -->
+    <div class="ob-step" data-step="1">
+      <div class="ob-crest" id="obCrest">♠</div>
+      <span class="ob-kicker" id="obKicker">✦ Bienvenue au Royal Night ✦</span>
+      <h2 class="ob-title" id="obStep1Title">Fondez votre entreprise</h2>
+      <p class="ob-lead" id="obStep1Lead">Tout commence par un nom. Celui de l'empire que vous vous apprêtez à bâtir.</p>
+      <label class="ob-field-label" for="obName" id="obNameLabel">Nom de l'entreprise</label>
+      <input id="obName" class="ob-input" maxlength="28" autocomplete="off" placeholder="Ex. Royal Ventures & Cie">
+      <button id="obNext" class="btn-primary big">Continuer&nbsp;→</button>
+    </div>
+
+    <!-- Étape 2 : choix du pays -->
+    <div class="ob-step" data-step="2" hidden>
+      <h2 class="ob-title">Où installer <span id="obNameEcho">votre entreprise</span> ?</h2>
+      <p class="ob-lead">Choisissez votre pays d'implantation sur la planisphère — cliquez une épingle ou cherchez un pays.</p>
+      <div class="ob-search-wrap">
+        <input id="obSearch" class="ob-input" autocomplete="off" placeholder="🔍 Rechercher un pays…">
+        <div id="obSuggest" class="ob-suggest" hidden></div>
+      </div>
+      <div id="obMapWrap" class="ob-map-wrap"></div>
+      <div class="ob-selected">Pays choisi : <b id="obCountry">—</b></div>
+      <div class="ob-actions">
+        <button id="obBack" class="btn-ghost">← Retour</button>
+        <button id="obFinish" class="btn-primary big" disabled>Installer mon entreprise</button>
+      </div>
+    </div>
+
+    <!-- Étape 3 : affiche explicative -->
+    <div class="ob-step" data-step="3" hidden>
+      <div class="ob-crest">🎰</div>
+      <h2 class="ob-title"><span id="obStep3Company">Votre entreprise</span> est fondée&nbsp;!</h2>
+      <p class="ob-lead">Implantée à <b id="obStep3Country">—</b>. Voici comment vous allez la faire prospérer.</p>
+      <div class="ob-brief" id="obBrief">
+        <p>💎 <b>Le casino est le cœur de votre activité.</b></p>
+        <p>Chaque partie — Machine, Blackjack, Poker, Dés — est une opportunité de <b>gagner des crédits</b> et de faire <b>grandir votre commerce</b>.</p>
+        <p>Au niveau 1, seule la <b>Machine à rouleaux</b> est ouverte. En montant de <b>niveau</b>, vous débloquez le Blackjack (niv. 20), le Poker (niv. 35) puis les Dés (niv. 50), et votre empire s'étend : Concession, Import / Export…</p>
+        <p class="ob-brief-note">À vous de transformer la chance en fortune. 🍀</p>
+      </div>
+      <button id="obStart" class="btn-primary big">Entrer dans l'aventure&nbsp;🎲</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════ SITE D'ACHAT (concession) ══════════════════ -->
+<div id="shop" class="shop hidden">
+  <div class="computer">
+    <div class="computer-screen">
+      <div class="browser-bar">
+        <span class="browser-dots"><i></i><i></i><i></i></span>
+        <span class="browser-url" id="shopUrl">www.royal-auto.market</span>
+        <button class="shop-close" id="shopClose" aria-label="Fermer">✕</button>
+      </div>
+      <div class="site">
+        <div class="store-top">
+          <span class="store-logo" id="shopLogo">🚗 RoyalMotors</span>
+          <div class="store-searchwrap">
+            <input class="store-search" id="shopSearch" type="search" autocomplete="off" placeholder="Rechercher un modèle…">
+          </div>
+          <span class="store-cart" title="Véhicules achetés">🛒 <b id="shopCart">0</b></span>
+        </div>
+        <header class="site-head">
+          <h2 class="site-title" id="shopTitle">Voitures — France</h2>
+          <p class="site-sub" id="shopSub">Constructeurs de France</p>
+        </header>
+        <div class="store-country">
+          <span class="sc-label">🌍 Acheter en :</span>
+          <div class="sc-search">
+            <input id="shopCountry" class="sc-input" type="search" autocomplete="off" placeholder="Choisir un pays…">
+            <div id="shopCountrySuggest" class="sc-suggest" hidden></div>
+          </div>
+          <span class="sc-route" id="shopRoute"></span>
+        </div>
+        <div class="store-toolbar">
+          <span class="store-count" id="shopCount">0 modèle disponible</span>
+          <label class="store-sort">Trier&nbsp;:
+            <select id="shopSort">
+              <option value="feat">Sélection</option>
+              <option value="asc">Prix croissant</option>
+              <option value="desc">Prix décroissant</option>
+              <option value="az">Nom A→Z</option>
+            </select>
+          </label>
+        </div>
+        <div class="site-grid" id="shopGrid"></div>
+        <div class="store-foot">Paiement en crédits fictifs · Livraison mondiale offerte · Garantie Royal ✦</div>
+      </div>
+    </div>
+    <div class="computer-stand"></div>
+    <div class="computer-foot"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ OFFRE D'EMPLOI (niveau max) ══════════════════ -->
+<div id="jobOffer" class="ob-mini hidden">
+  <div class="ob-card ob-card-sm">
+    <div class="ob-crest">🏆</div>
+    <span class="ob-kicker">✦ Niveau maximum atteint ✦</span>
+    <h2 class="ob-title">Une nouvelle carrière vous attend</h2>
+    <p class="ob-lead">Vous avez tout conquis dans le commerce. On vous propose un nouvel emploi : <b>l'investissement immobilier</b>. Fondez votre agence, repartez de zéro… et bâtissez un empire encore plus grand.</p>
+    <div class="ob-actions">
+      <button class="btn-ghost" id="jobLater">Plus tard</button>
+      <button class="btn-primary big" id="jobChange">Changer d'emploi&nbsp;→</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ PARAMÈTRES ══════════════════ -->
+<div id="settings" class="ob-mini hidden">
+  <div class="ob-card ob-card-sm settings-card">
+    <button class="settings-close" id="settingsClose" aria-label="Fermer">✕</button>
+    <h2 class="ob-title" data-i18n="settings.title">Paramètres</h2>
+
+    <div class="set-section">
+      <span class="set-label" data-i18n="settings.lang">Langue</span>
+      <div class="set-langs">
+        <button class="set-lang" data-lang="fr">Français</button>
+        <button class="set-lang" data-lang="en">English</button>
+      </div>
+    </div>
+
+    <div class="set-section">
+      <span class="set-label" data-i18n="settings.audio">Audio</span>
+      <label class="set-row"><span data-i18n="settings.music">Musique</span>
+        <input type="range" id="setMusicVol" min="0" max="100" value="55" aria-label="Volume musique"></label>
+      <label class="set-row"><span data-i18n="settings.sfx">Effets sonores</span>
+        <input type="range" id="setSfxVol" min="0" max="100" value="100" aria-label="Volume effets"></label>
+    </div>
+
+    <div class="set-section">
+      <span class="set-label" data-i18n="settings.saves">Sauvegardes (emplois)</span>
+      <div class="set-saves">
+        <button class="set-save" data-mode="commerce">🎰 <span data-i18n="mode.commerce">Commerce</span></button>
+        <button class="set-save" data-mode="immobilier">🏛️ <span data-i18n="mode.immobilier">Immobilier</span></button>
+      </div>
+      <p class="set-note" id="setSavesNote"></p>
+    </div>
+
+    <div class="set-section">
+      <span class="set-label">Emplacements de sauvegarde</span>
+      <button class="btn-ghost set-full" id="setSwitchSlot">💾 Changer d'emplacement</button>
+      <button class="btn-ghost set-full" id="setShare">📤 Partager une invitation</button>
+      <p class="set-note">Votre partie s'enregistre automatiquement dans l'emplacement en cours.</p>
+    </div>
+
+    <div class="set-section">
+      <span class="set-label">Multijoueur</span>
+      <button class="btn-primary set-full" id="setMulti">🌐 Sauvegarde à 2 (en ligne)</button>
+      <p class="set-note" id="setMultiNote">Nécessite une connexion internet active.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ SÉLECTION DES SAUVEGARDES (lancement) ══════════════════ -->
+<div id="slotSelect" class="slot-select hidden">
+  <div class="slot-inner">
+    <div class="slot-crest">♠</div>
+    <h1 class="slot-title">ROYAL&nbsp;NIGHT&nbsp;CASINO</h1>
+    <p class="slot-sub">Choisissez un emplacement de sauvegarde</p>
+    <div class="slot-grid" id="slotGrid"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ MODE 2 JOUEURS (EN LIGNE) ══════════════════ -->
+<div id="mp" class="mp-modal hidden">
+  <div class="mp-box">
+    <button class="mp-close" id="mpClose" aria-label="Fermer">✕</button>
+    <div class="mp-code-bar" id="mpCodeBar" hidden>Code de la partie : <b id="mpCode">------</b>
+      <button id="mpShare2" class="mp-mini" title="Partager l'invitation">📤 Inviter</button></div>
+
+    <div class="mp-screen" data-mp="menu">
+      <h2 class="mp-title">🌐 Jouer à 2 — en ligne</h2>
+      <p class="mp-sub">Associez-vous à un ami : pays uniques, et commerce entre vous <b>réduit</b> (prix et délais).</p>
+      <button class="btn-primary big" id="mpHost">Héberger une partie</button>
+      <button class="btn-ghost big" id="mpJoinBtn">Rejoindre via un code</button>
+      <p class="mp-note" id="mpOnlineNote"></p>
+    </div>
+
+    <div class="mp-screen" data-mp="join" hidden>
+      <h2 class="mp-title">Rejoindre une partie</h2>
+      <p class="mp-sub">Saisissez le code à 6 caractères de votre ami.</p>
+      <div class="mp-code-input" id="mpCodeInput">
+        <input maxlength="1" inputmode="latin" autocomplete="off"><input maxlength="1"><input maxlength="1"><input maxlength="1"><input maxlength="1"><input maxlength="1">
+      </div>
+      <button class="btn-primary big" id="mpJoinGo">Rejoindre</button>
+      <button class="btn-ghost" id="mpBack">← Retour</button>
+    </div>
+
+    <div class="mp-screen" data-mp="lobby" hidden>
+      <h2 class="mp-title">Salon</h2>
+      <div class="mp-players">
+        <div class="mp-player" id="mpP1"><span class="mp-p-name" id="mpP1Name">Vous</span><span class="mp-p-state" id="mpP1State">Pas prêt</span></div>
+        <div class="mp-vs">🤝</div>
+        <div class="mp-player waiting" id="mpP2"><span class="mp-p-name" id="mpP2Name">En attente…</span><span class="mp-p-state" id="mpP2State"></span></div>
+      </div>
+      <p class="mp-sub" id="mpLobbyHint">Partagez le code pour que votre ami vous rejoigne.</p>
+      <button class="btn-primary big" id="mpReady" disabled>Je suis prêt</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ ROUE QUOTIDIENNE ══════════════════ -->
+<div id="wheel" class="wheel-modal hidden">
+  <div class="wheel-box">
+    <button class="wheel-close" id="wheelClose" aria-label="Fermer">✕</button>
+    <h2 class="wheel-title">🎡 Roue quotidienne</h2>
+    <p class="wheel-sub" id="wheelSub">Tentez votre chance — une fois par jour !</p>
+    <div class="wheel-wrap">
+      <div class="wheel-pointer"></div>
+      <div class="wheel-svg-host" id="wheelSvgHost"></div>
+    </div>
+    <div class="wheel-result" id="wheelResult"></div>
+    <button class="btn-primary big" id="wheelSpin">TOURNER LA ROUE</button>
+  </div>
+</div>
+
+<!-- ══════════════════ TOAST / NOTIFICATIONS ══════════════════ -->
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<!-- ══════════════════ MODAL DE CONFIRMATION ══════════════════ -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <p id="modalText">Confirmer ?</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="modalCancel">Annuler</button>
+      <button class="btn-primary" id="modalOk">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<script src="world.js?v=49"></script>
+<script src="app.js?v=49"></script>
+</body>
+</html>

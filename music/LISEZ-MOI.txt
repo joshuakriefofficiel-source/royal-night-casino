@@ -1,0 +1,22 @@
+MUSIQUE DE FOND — Royal Night Casino
+=====================================
+
+Le casino joue en fond le morceau :
+    Jhelisa / Sunship — Friendly Pressure (Into the Sunshine Mix)
+
+Ce morceau est protégé par le droit d'auteur : il n'est PAS fourni avec le
+projet. Pour l'entendre, placez VOTRE copie légale (achetée / issue de votre
+bibliothèque) dans ce dossier, avec l'un de ces noms exacts :
+
+    friendly-pressure.mp3            <-- recommandé
+    Friendly Pressure - Into the Sunshine Mix.mp3
+    friendly-pressure.ogg
+    friendly-pressure.m4a
+
+Le jeu détecte automatiquement le fichier au démarrage.
+
+Tant qu'aucun fichier n'est présent, le casino joue une ambiance musicale
+synthétisée (générée en direct, sans fichier) pour ne jamais rester silencieux.
+
+Le bouton 🎵 de la barre du haut met la musique en pause / la relance,
+et le bouton 🔊 gère les effets sonores.

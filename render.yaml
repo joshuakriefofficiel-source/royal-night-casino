@@ -1,0 +1,14 @@
+# Blueprint Render — déploie le jeu + le serveur multijoueur en un service.
+# Sur Render : New +  →  Blueprint  →  choisir ce dépôt  →  Apply.
+services:
+  - type: web
+    name: royal-night-casino
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
