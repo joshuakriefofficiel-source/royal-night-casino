@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=52">
+<link rel="stylesheet" href="style.css?v=56">
 </head>
 <body>
 
@@ -668,6 +668,13 @@
       <button class="btn-primary big" id="mpHost">Héberger une partie</button>
       <button class="btn-ghost big" id="mpJoinBtn">Rejoindre via un code</button>
       <p class="mp-note" id="mpOnlineNote"></p>
+
+      <details class="mp-adv">
+        <summary>⚙️ Serveur (avancé)</summary>
+        <p class="mp-sub">Les 2 joueurs doivent être sur le <b>même serveur</b>. Laissez vide si vous avez ouvert le lien de l'hôte.</p>
+        <input id="mpServer" class="mp-server-input" placeholder="auto — ex : 192.168.1.20:8787" autocomplete="off" spellcheck="false">
+        <p class="mp-note" id="mpServerNow"></p>
+      </details>
     </div>
 
     <div class="mp-screen" data-mp="join" hidden>
@@ -688,6 +695,7 @@
         <div class="mp-player waiting" id="mpP2"><span class="mp-p-name" id="mpP2Name">En attente…</span><span class="mp-p-state" id="mpP2State"></span></div>
       </div>
       <p class="mp-sub" id="mpLobbyHint">Partagez le code pour que votre ami vous rejoigne.</p>
+      <p class="mp-note" id="mpConnInfo"></p>
       <button class="btn-primary big" id="mpReady" disabled>Je suis prêt</button>
     </div>
   </div>
@@ -708,6 +716,17 @@
   </div>
 </div>
 
+<!-- ══════════════════ HUD DUO (co-op temps réel) ══════════════════ -->
+<div id="duoHud" class="duo-hud hidden" aria-live="polite">
+  <div class="duo-head">🤝 <b>Duo</b> <span id="duoLink" class="duo-link">● en ligne</span></div>
+  <div class="duo-row"><span class="duo-lab" id="duoPName">Partenaire</span><span class="duo-val" id="duoPStat">—</span></div>
+  <div class="duo-goal">
+    <div class="duo-goal-top"><span>Objectif commun</span><span id="duoGoalPct">0 %</span></div>
+    <div class="duo-bar"><div class="duo-bar-fill" id="duoBarFill"></div></div>
+    <div class="duo-goal-sub" id="duoGoalSub">Fortune cumulée 0 € / 1 000 000 €</div>
+  </div>
+</div>
+
 <!-- ══════════════════ TOAST / NOTIFICATIONS ══════════════════ -->
 <div id="toast" class="toast" aria-live="polite"></div>
 
@@ -722,7 +741,7 @@
   </div>
 </div>
 
-<script src="world.js?v=52"></script>
-<script src="app.js?v=52"></script>
+<script src="world.js?v=56"></script>
+<script src="app.js?v=56"></script>
 </body>
 </html>

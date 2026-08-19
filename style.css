@@ -565,6 +565,30 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .mp-p-state{display:block;color:var(--txt-dim);font-size:.82rem;margin-top:.3rem}
 .mp-vs{font-size:1.6rem}
 .ie-duo{background:rgba(63,174,107,.16)!important;color:#7fe0a0!important;border-color:rgba(63,174,107,.4)!important}
+/* Serveur (avancé) */
+.mp-adv{margin-top:1rem;text-align:left;border-top:1px solid var(--line);padding-top:.7rem}
+.mp-adv summary{cursor:pointer;color:var(--gold-2);font-size:.85rem;letter-spacing:.03em;list-style:none}
+.mp-adv summary::-webkit-details-marker{display:none}
+.mp-server-input{width:100%;box-sizing:border-box;margin-top:.5rem;padding:.6rem .8rem;background:#0a0a0d;
+  border:1px solid var(--line);border-radius:10px;color:var(--gold-2);font-family:var(--font-ui);font-size:.95rem;outline:none}
+.mp-server-input:focus-visible{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,180,91,.2)}
+
+/* ─────────── HUD DUO (co-op temps réel) ─────────── */
+.duo-hud{position:fixed;left:14px;bottom:14px;z-index:150;width:min(280px,86vw);
+  background:linear-gradient(180deg,rgba(24,22,17,.96),rgba(14,13,11,.96));
+  border:1px solid var(--gold-deep);border-radius:14px;padding:.8rem .9rem;
+  box-shadow:0 10px 34px rgba(0,0,0,.5);backdrop-filter:blur(8px);font-size:.85rem}
+.duo-head{font-family:var(--font-display);color:var(--gold-2);letter-spacing:.04em;display:flex;align-items:center;gap:.4rem;margin-bottom:.55rem}
+.duo-link{margin-left:auto;font-size:.72rem;color:#7fe0a0}
+.duo-link.off{color:#e2907f}
+.duo-row{display:flex;justify-content:space-between;gap:.6rem;margin-bottom:.6rem}
+.duo-lab{color:var(--gold-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.duo-val{color:var(--txt-dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.duo-goal-top{display:flex;justify-content:space-between;font-size:.78rem;color:var(--gold);margin-bottom:.3rem}
+.duo-bar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden}
+.duo-bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--gold-deep),var(--gold-2));transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.duo-goal-sub{font-size:.72rem;color:var(--txt-dim);margin-top:.3rem;font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){.duo-bar-fill{transition:none}}
 
 /* ─────────── SÉLECTION DES SAUVEGARDES ─────────── */
 .slot-select{position:fixed;inset:0;z-index:195;display:grid;place-items:center;padding:1.4rem;overflow-y:auto;

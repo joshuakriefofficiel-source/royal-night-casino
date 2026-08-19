@@ -69,14 +69,12 @@ const Sound = (() => {
   let musVol = 0.55;   // 0..1 volume musique (cible du master)
 
   /* ── Musique de fond : fichier audio local ──────────────────────────
-     Déposez votre copie LÉGALE du morceau ici :
-       royal-night-casino/music/friendly-pressure.mp3
-     (Jhelisa / Sunship — Friendly Pressure, Into the Sunshine Mix)
+     Morceau principal : « Midnight Velvet » (composé sur Suno par le joueur).
      On tente plusieurs noms/extensions ; si aucun fichier n'est trouvé,
      on retombe sur l'ambiance synthétisée d'origine.               */
   const MUSIC_SOURCES = [
+    'music/midnight-velvet.mp3',
     'music/friendly-pressure.mp3',
-    'music/Friendly Pressure - Into the Sunshine Mix.mp3',
     'music/friendly-pressure.ogg',
     'music/friendly-pressure.m4a',
   ];
@@ -97,7 +95,21 @@ const Sound = (() => {
       musicEl.src = encodeURI(MUSIC_SOURCES[srcIdx++]);
       musicEl.load();
     };
-    musicEl.addEventListener('canplaythrough', () => { musicElReady = true; }, { once: false });
+    musicEl.addEventListener('canplaythrough', () => {
+      musicElReady = true;
+      // Si la musique est active et qu'on jouait l'ambiance de repli,
+      // on bascule sur la chanson dès qu'elle est prête.
+      if (musicOn && !usingFile) {
+        if (musicNodes) {
+          clearInterval(musicNodes.timer);
+          try { musicNodes.master.gain.linearRampToValueAtTime(0.0001, (ctx?.currentTime || 0) + 0.4); } catch (e) {}
+          try { musicNodes.lfo && musicNodes.lfo.stop((ctx?.currentTime || 0) + 0.5); } catch (e) {}
+          musicNodes = null;
+        }
+        usingFile = true;
+        const p = musicEl.play(); if (p && p.catch) p.catch(() => {});
+      }
+    }, { once: false });
     musicEl.addEventListener('error', tryNext);
     tryNext();
   };
@@ -165,21 +177,31 @@ const Sound = (() => {
       if (p && p.catch) p.catch(() => { /* autoplay bloqué : réessai au prochain geste */ });
       return;
     }
-    // 2) Repli : ambiance lounge générée en direct (jazz feutré de casino).
+    // 2) Repli : ambiance lounge nocturne générée en direct (immersive, feutrée).
     const c = ensure(); if (!c || musicNodes) return;
 
-    // Chaîne maître : passe-bas chaleureux + fondu d'entrée.
+    // Chaîne maître : passe-bas chaleureux + écho spatial + fondu d'entrée.
     const master = c.createGain(); master.gain.value = 0.0001;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 0.5;
-    master.connect(lp).connect(c.destination);
-    master.gain.linearRampToValueAtTime(Math.max(0.0001, musVol), c.currentTime + 2);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200; lp.Q.value = 0.6;
+    master.connect(lp);
+    lp.connect(c.destination);                                   // signal direct
+    // Écho feutré (impression de grande salle / réverbération).
+    const delay = c.createDelay(); delay.delayTime.value = 0.42;
+    const fb = c.createGain(); fb.gain.value = 0.34;
+    const wet = c.createGain(); wet.gain.value = 0.32;
+    lp.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(c.destination);
+    // Filtre qui « respire » très lentement (mouvement de nappe).
+    const lfo = c.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.045;
+    const lfoAmt = c.createGain(); lfoAmt.gain.value = 700;
+    lfo.connect(lfoAmt).connect(lp.frequency); lfo.start();
+    master.gain.linearRampToValueAtTime(Math.max(0.0001, musVol), c.currentTime + 3);
 
     const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
     const nodes = [];
 
-    // Une voix mélodique/harmonique avec enveloppe douce et panoramique.
-    const voice = (freq, t0, dur, { type = 'sine', vol = 0.12, attack = 0.4, release = 0.9, pan = 0 } = {}) => {
-      const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t0);
+    // Voix simple avec enveloppe douce + panoramique + détune léger.
+    const voice = (freq, t0, dur, { type = 'sine', vol = 0.12, attack = 0.4, release = 0.9, pan = 0, detune = 0 } = {}) => {
+      const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t0); o.detune.value = detune;
       const g = c.createGain();
       g.gain.setValueAtTime(0.0001, t0);
       g.gain.linearRampToValueAtTime(vol, t0 + attack);
@@ -190,53 +212,43 @@ const Sound = (() => {
       out.connect(master);
       o.start(t0); o.stop(t0 + dur + 0.05); nodes.push(o);
     };
-    // Shaker feutré (bruit filtré) pour un léger groove.
-    const shaker = (t0, vol = 0.03) => {
-      const dur = 0.07;
-      const buf = c.createBuffer(1, Math.max(1, c.sampleRate * dur), c.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-      const s = c.createBufferSource(); s.buffer = buf;
-      const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6500;
-      const g = c.createGain(); g.gain.value = vol;
-      s.connect(hp).connect(g).connect(master); s.start(t0); nodes.push(s);
+    // Nappe large : deux oscillateurs détunés pour l'épaisseur stéréo.
+    const pad = (freq, t0, dur, { vol = 0.05, pan = 0 } = {}) => {
+      voice(freq, t0, dur, { type: 'triangle', vol, attack: 1.6, release: 2.2, pan: pan - 0.15, detune: -6 });
+      voice(freq, t0, dur, { type: 'sine', vol: vol * 0.85, attack: 1.8, release: 2.2, pan: pan + 0.15, detune: +6 });
     };
 
-    // Progression lounge (Cmaj7 – Am7 – Dm7 – G7) + basse + gamme penta pour la mélodie.
+    // Progression rêveuse (Am9 – Fmaj9 – Cmaj9 – G13) + basse grave.
     const chords = [
-      { notes: [60, 64, 67, 71], bass: 48 },
-      { notes: [57, 60, 64, 67], bass: 45 },
-      { notes: [62, 65, 69, 72], bass: 50 },
-      { notes: [55, 59, 62, 65], bass: 43 },
+      { notes: [57, 60, 64, 67, 71], bass: 33 },
+      { notes: [53, 57, 60, 64, 67], bass: 29 },
+      { notes: [60, 64, 67, 71, 74], bass: 36 },
+      { notes: [55, 59, 62, 66, 69], bass: 31 },
     ];
-    const penta = [72, 74, 76, 79, 81, 84];
-    const BAR = 3.4;
+    const penta = [72, 74, 76, 79, 81, 84, 88];
+    const BAR = 4.6;   // tempo lent → plus atmosphérique
     let bar = 0;
 
     const scheduleBar = () => {
       if (!musicNodes) return;
       const t0 = c.currentTime + 0.06;
       const ch = chords[bar % chords.length];
-      // Nappe d'accord
-      ch.notes.forEach((m, i) => voice(midi(m), t0, BAR + 0.7, {
-        type: i === 0 ? 'triangle' : 'sine', vol: 0.055, attack: 1, release: 1.3, pan: (i - 1.5) * 0.28,
-      }));
-      // Basse feutrée
-      voice(midi(ch.bass), t0, BAR, { type: 'sine', vol: 0.13, attack: 0.12, release: 0.5 });
-      // Notes de piano clairsemées (lounge)
-      const count = 1 + (Math.random() < 0.6 ? 1 : 0);
-      for (let k = 0; k < count; k++) {
-        const off = 0.5 + Math.random() * (BAR - 1.2);
+      // Nappe d'accord large et évolutive
+      ch.notes.forEach((m, i) => pad(midi(m), t0, BAR + 1.4, { vol: 0.042, pan: (i - 2) * 0.22 }));
+      // Basse grave et ronde (sub)
+      voice(midi(ch.bass), t0, BAR + 0.4, { type: 'sine', vol: 0.16, attack: 0.4, release: 0.9 });
+      voice(midi(ch.bass + 12), t0, BAR, { type: 'sine', vol: 0.06, attack: 0.3, release: 0.7 });
+      // Cloches / celesta clairsemées et rêveuses
+      if (Math.random() < 0.7) {
+        const off = 0.8 + Math.random() * (BAR - 2);
         const note = penta[Math.floor(Math.random() * penta.length)];
-        voice(midi(note), t0 + off, 0.9, { type: 'triangle', vol: 0.05, attack: 0.02, release: 0.7, pan: (Math.random() * 2 - 1) * 0.5 });
+        voice(midi(note), t0 + off, 1.6, { type: 'sine', vol: 0.045, attack: 0.01, release: 1.4, pan: (Math.random() * 2 - 1) * 0.6 });
       }
-      // Shaker sur les croches
-      for (let s = 0; s < 4; s++) shaker(t0 + s * (BAR / 4), s % 2 ? 0.018 : 0.032);
       bar++;
     };
     scheduleBar();
     const timer = setInterval(scheduleBar, BAR * 1000);
-    musicNodes = { master, timer, nodes };
+    musicNodes = { master, timer, nodes, lfo };
   };
   const stopMusic = () => {
     // Coupe le fichier audio s'il joue…
@@ -245,6 +257,7 @@ const Sound = (() => {
     if (musicNodes) {
       clearInterval(musicNodes.timer);
       try { musicNodes.master.gain.linearRampToValueAtTime(0.0001, (ctx?.currentTime || 0) + 0.4); } catch (e) {}
+      try { musicNodes.lfo && musicNodes.lfo.stop((ctx?.currentTime || 0) + 0.5); } catch (e) {}
       musicNodes = null;
     }
   };
@@ -2714,15 +2727,32 @@ const Multiplayer = (() => {
   //  • dev local (python http.server) → ws://localhost:8787 (serveur node séparé)
   //  Surchargeable via localStorage 'mpUrl'.
   const url = () => {
-    const o = localStorage.getItem('mpUrl'); if (o) return o;
-    if (location.protocol === 'https:') return 'wss://' + location.host;
-    const h = location.hostname || 'localhost';
-    if (h === 'localhost' || h === '127.0.0.1') return 'ws://' + h + ':8787';
-    return 'ws://' + location.host;
+    const o = (localStorage.getItem('mpUrl') || '').trim(); if (o) return o;
+    // Servi par le serveur node (http/https) → WebSocket sur la MÊME adresse.
+    // → marche en LAN (http://IP-hote:8787) comme en ligne (https://app.onrender.com).
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+    }
+    // Jeu ouvert en fichier local (file://) → serveur node local par défaut.
+    return 'ws://localhost:8787';
+  };
+  // Normalise une adresse saisie (IP:port, http://…, ws://…) en URL WebSocket.
+  const normalizeServer = (v) => {
+    v = (v || '').trim(); if (!v) return '';
+    if (/^wss?:\/\//i.test(v)) return v;
+    if (/^https?:\/\//i.test(v)) return v.replace(/^http/i, 'ws');
+    return (location.protocol === 'https:' ? 'wss://' : 'ws://') + v;
+  };
+  const applyServerField = () => {
+    const el = $('#mpServer'); if (!el) return;
+    const srv = normalizeServer(el.value);
+    if (srv) localStorage.setItem('mpUrl', srv); else localStorage.removeItem('mpUrl');
   };
   let ws = null, modal, myName = 'Joueur', peerName = '', idx = 0;
   let active = false, partnerCountry = null, code = '';
   let countryResolve = null;
+  let partnerState = null, syncTimer = null, lastSync = 0;
+  const DUO_GOAL = 1000000;   // objectif commun : fortune cumulée du duo
 
   const init = () => {
     modal = $('#mp');
@@ -2742,8 +2772,30 @@ const Multiplayer = (() => {
       });
       inp.addEventListener('keydown', (e) => { if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i - 1].focus(); });
     });
+    // Champ serveur (avancé) : mémorise l'adresse et met à jour l'aperçu.
+    const sf = $('#mpServer');
+    if (sf) {
+      sf.value = (localStorage.getItem('mpUrl') || '');
+      sf.addEventListener('input', () => { applyServerField(); updateServerInfo(); });
+    }
     // Coupure réseau → la session se ferme (la sauvegarde reste intacte).
     window.addEventListener('offline', () => { if (active || ws) { UI.toast('📴 Connexion perdue — session fermée. Votre sauvegarde est intacte.', 'lose'); teardown(); } });
+  };
+
+  // Décrit le serveur détecté + prévient si l'adresse n'est pas partageable.
+  const updateServerInfo = () => {
+    const now = $('#mpServerNow'); if (now) now.textContent = 'Connexion à : ' + url();
+    const info = $('#mpConnInfo');
+    if (info) {
+      const h = location.hostname;
+      if (location.protocol === 'file:') {
+        info.innerHTML = '⚠️ Jeu ouvert en fichier local — lancez <b>node server.js</b> et ouvrez <b>http://IP-de-l-hôte:8787</b> sur les 2 appareils.';
+      } else if (h === 'localhost' || h === '127.0.0.1') {
+        info.innerHTML = '⚠️ Vous êtes sur <b>localhost</b> : un ami sur un autre appareil ne pourra pas rejoindre. Ouvrez le jeu via votre IP locale (<b>http://VOTRE-IP:8787</b>) ou déployez en ligne, puis partagez cette adresse.';
+      } else {
+        info.innerHTML = 'Votre ami doit ouvrir <b>' + location.origin + '</b> puis entrer le code ci-dessus.';
+      }
+    }
   };
 
   const screen = (name) => $$('.mp-screen', modal).forEach((s) => { s.hidden = s.dataset.mp !== name; });
@@ -2753,6 +2805,7 @@ const Multiplayer = (() => {
     myName = (Bank.company && Bank.company.name) || 'Joueur';
     $('#mpCodeBar').hidden = true;
     $('#mpOnlineNote').textContent = navigator.onLine ? '' : 'Hors ligne.';
+    updateServerInfo();
     screen('menu');
     modal.classList.remove('hidden');
     Sound.play('select');
@@ -2767,14 +2820,16 @@ const Multiplayer = (() => {
   });
 
   const host = async () => {
-    try { await connect(); } catch (e) { UI.toast('Impossible de joindre le serveur multijoueur. Est-il lancé ?', 'lose'); return; }
+    applyServerField();
+    try { await connect(); } catch (e) { UI.toast('Impossible de joindre le serveur (' + url() + '). Est-il lancé ?', 'lose'); return; }
     send({ type: 'host', name: myName });
   };
 
   const join = async () => {
+    applyServerField();
     const c = $$('#mpCodeInput input').map((i) => i.value).join('').toUpperCase();
     if (c.length !== 6) { UI.toast('Entrez les 6 caractères du code.', 'lose'); return; }
-    try { await connect(); } catch (e) { UI.toast('Impossible de joindre le serveur multijoueur.', 'lose'); return; }
+    try { await connect(); } catch (e) { UI.toast('Impossible de joindre le serveur (' + url() + '). Vérifiez l\'adresse dans ⚙️ Serveur.', 'lose'); return; }
     send({ type: 'join', code: c, name: myName });
   };
 
@@ -2791,6 +2846,7 @@ const Multiplayer = (() => {
     $('#mpP2').classList.toggle('waiting', !pn);
     $('#mpReady').disabled = !pn;             // prêt possible seulement quand le duo est là
     $('#mpLobbyHint').textContent = pn ? 'Cliquez « Je suis prêt » quand vous l\'êtes.' : 'Partagez le code pour que votre ami vous rejoigne.';
+    updateServerInfo();
     screen('lobby');
   };
 
@@ -2801,6 +2857,10 @@ const Multiplayer = (() => {
     else if (m.type === 'peerReady') { $('#mpP2State').textContent = m.ready ? 'Prêt ✔' : 'Pas prêt'; }
     else if (m.type === 'start') { startGame(m.names); }
     else if (m.type === 'peerCountry') { partnerCountry = m.country; }
+    else if (m.type === 'relay') {
+      if (m.kind === 'sync') { partnerState = m.data || null; if (m.data && m.data.country) partnerCountry = m.data.country; renderDuoHud(); }
+      else if (m.kind === 'hello') { syncOut(true); }   // le partenaire demande notre état
+    }
     else if (m.type === 'countryOk') { if (countryResolve) { countryResolve(true); countryResolve = null; } }
     else if (m.type === 'countryRejected') { if (countryResolve) { countryResolve(false); countryResolve = null; } }
     else if (m.type === 'peerLeft') { UI.toast('Votre partenaire a quitté la partie — session fermée (sauvegarde intacte).', 'lose'); teardown(); }
@@ -2818,6 +2878,47 @@ const Multiplayer = (() => {
     UI.toast(`🎮 Partie à 2 lancée avec ${peerName} ! Créez votre entreprise (pays unique).`, 'win');
     Sound.play('jackpot'); UI.coinRain(20);
     Onboarding.start('company');   // chaque joueur crée son entreprise (pays vérifié côté serveur)
+    // Co-op live : on annonce notre état, on rafraîchit le HUD en continu.
+    renderDuoHud();
+    Bank.onChange(() => { if (active) { renderDuoHud(); syncOut(); } });
+    Bank.onXp(() => { if (active) { renderDuoHud(); syncOut(); } });
+    send({ type: 'relay', kind: 'hello' });          // demande l'état du partenaire
+    syncOut(true);
+    clearInterval(syncTimer);
+    syncTimer = setInterval(() => { syncOut(); renderDuoHud(); }, 4000);
+  };
+
+  // ── Synchro co-op temps réel ──────────────────────────────────────────
+  const mySnapshot = () => ({
+    name: (Bank.company && Bank.company.name) || myName,
+    country: (Bank.company && Bank.company.country) || '',
+    balance: Math.round(Bank.balance || 0),
+    level: Bank.level || 1,
+  });
+  const syncOut = (force) => {
+    if (!active || !ws || ws.readyState !== 1) return;
+    const now = Date.now();
+    if (!force && now - lastSync < 1200) return;   // throttle
+    lastSync = now;
+    send({ type: 'relay', kind: 'sync', data: mySnapshot() });
+  };
+  const fmtMoney = (n) => (Math.round(n)).toLocaleString('fr-FR') + ' €';
+  const renderDuoHud = () => {
+    const hud = $('#duoHud'); if (!hud) return;
+    if (!active) { hud.classList.add('hidden'); return; }
+    hud.classList.remove('hidden');
+    const link = $('#duoLink');
+    const online = ws && ws.readyState === 1;
+    if (link) { link.textContent = online ? '● en ligne' : '● hors ligne'; link.classList.toggle('off', !online); }
+    const ps = partnerState;
+    $('#duoPName').textContent = (ps && ps.name) || peerName || 'Partenaire';
+    $('#duoPStat').textContent = ps ? ('Niv. ' + ps.level + ' · ' + fmtMoney(ps.balance)) : 'en attente…';
+    const mine = Math.round(Bank.balance || 0);
+    const total = mine + ((ps && ps.balance) || 0);
+    const pct = Math.max(0, Math.min(100, Math.round(total / DUO_GOAL * 100)));
+    $('#duoGoalPct').textContent = pct + ' %';
+    $('#duoBarFill').style.width = pct + '%';
+    $('#duoGoalSub').textContent = 'Fortune cumulée ' + fmtMoney(total) + ' / ' + fmtMoney(DUO_GOAL);
   };
 
   // Réserve un pays côté serveur (unicité). Renvoie true si accepté.
@@ -2838,7 +2939,7 @@ const Multiplayer = (() => {
     } catch (e) {}
   };
 
-  const teardown = () => { active = false; partnerCountry = null; code = ''; try { ws && ws.close(); } catch (e) {} ws = null; modal.classList.add('hidden'); };
+  const teardown = () => { active = false; partnerCountry = null; partnerState = null; code = ''; clearInterval(syncTimer); syncTimer = null; const hud = $('#duoHud'); if (hud) hud.classList.add('hidden'); try { ws && ws.close(); } catch (e) {} ws = null; modal.classList.add('hidden'); };
   const close = () => { Sound.play('click'); teardown(); };
 
   return { init, openMenu, claimCountry, get active() { return active; }, get partnerCountry() { return partnerCountry; }, get peerName() { return peerName; } };
