@@ -354,7 +354,7 @@ const Bank = (() => {
     get currentSlot() { return slot(); },
     slotPreview,
     setSlot(n) { localStorage.setItem(SLOT_PTR, String(n)); resetState(); load(); emit(); emitXp(); },
-    deleteSlot(n) { localStorage.removeItem(BASE + '_s' + n); if (slot() === String(n)) { resetState(); save(); emit(); emitXp(); } },
+    deleteSlot(n) { localStorage.removeItem(BASE + '_s' + n); if (slot() === String(n)) { resetState(); emit(); emitXp(); } },
     get balance() { return cur().balance; },
     get history() { return cur().history; },
     get stats() { return cur().stats; },
@@ -2811,6 +2811,10 @@ const Multiplayer = (() => {
     active = true;
     peerName = names[idx === 0 ? 1 : 0];
     modal.classList.add('hidden');
+    // Si on venait de l'écran de démarrage, on révèle le jeu.
+    const ss = $('#slotSelect'); if (ss) ss.classList.add('hidden');
+    $('#navbar').classList.remove('hidden');
+    Nav.go('home');
     UI.toast(`🎮 Partie à 2 lancée avec ${peerName} ! Créez votre entreprise (pays unique).`, 'win');
     Sound.play('jackpot'); UI.coinRain(20);
     Onboarding.start('company');   // chaque joueur crée son entreprise (pays vérifié côté serveur)
@@ -2847,7 +2851,13 @@ const SlotSelect = (() => {
   let el;
   const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-  const init = () => { el = $('#slotSelect'); el.addEventListener('click', onClick); };
+  const init = () => {
+    el = $('#slotSelect'); el.addEventListener('click', onClick);
+    $('#slotMulti').addEventListener('click', () => {
+      if (!navigator.onLine) { UI.toast('📴 Activez le Wi-Fi / internet pour jouer à 2 en ligne.', 'lose'); return; }
+      Multiplayer.openMenu();
+    });
+  };
 
   const render = () => {
     $('#slotGrid').innerHTML = [1, 2, 3].map((n) => {
@@ -2887,7 +2897,12 @@ const SlotSelect = (() => {
     if (!Bank.company) Onboarding.start(Bank.mode === 'immobilier' ? 'agency' : 'company');
   };
 
-  const show = () => { render(); el.classList.remove('hidden'); $('#navbar').classList.add('hidden'); };
+  const show = () => {
+    render(); el.classList.remove('hidden'); $('#navbar').classList.add('hidden');
+    const note = $('#slotMultiNote'), btn = $('#slotMulti');
+    if (note) note.textContent = navigator.onLine ? '' : '📴 Connexion internet requise pour le mode 2 joueurs.';
+    if (btn) btn.disabled = !navigator.onLine;
+  };
   return { init, show };
 })();
 

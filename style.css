@@ -537,7 +537,7 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 @keyframes popRes{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
 
 /* ─────────── MODE 2 JOUEURS (EN LIGNE) ─────────── */
-.mp-modal{position:fixed;inset:0;z-index:192;display:grid;place-items:center;padding:1.2rem;
+.mp-modal{position:fixed;inset:0;z-index:210;display:grid;place-items:center;padding:1.2rem;
   background:rgba(4,4,7,.82);backdrop-filter:blur(6px);animation:viewIn .3s}
 .mp-box{position:relative;background:linear-gradient(180deg,#16161c,#0c0b10);border:1px solid var(--line);
   border-radius:22px;padding:2rem 1.6rem 1.6rem;text-align:center;max-width:440px;width:94%;box-shadow:var(--shadow)}
@@ -588,6 +588,8 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .slot-actions .btn-primary{flex:1}
 .slot-del{padding:.7rem .8rem;font-size:.8rem}
 .set-full{display:block;width:100%;text-align:center;margin-bottom:.5rem}
+.slot-multi{margin-top:1.8rem;display:inline-block;min-width:280px}
+.slot-multi-note{color:var(--txt-dim);font-size:.82rem;margin-top:.6rem}
 
 /* ─────────── ONBOARDING ─────────── */
 .onboarding{position:fixed;inset:0;z-index:190;display:grid;place-items:center;padding:1.2rem;
@@ -784,7 +786,7 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .rescue-btn{margin-bottom:.6rem;background:linear-gradient(180deg,#e0a030,#b9791d);color:#1a1206}
 
 /* ─────────── MODAL ─────────── */
-.modal{position:fixed;inset:0;z-index:180;display:grid;place-items:center;background:rgba(0,0,0,.7);
+.modal{position:fixed;inset:0;z-index:240;display:grid;place-items:center;background:rgba(0,0,0,.7);
   backdrop-filter:blur(4px);animation:viewIn .25s}
 .modal-box{background:linear-gradient(180deg,#17171d,#0d0d11);border:1px solid var(--line);border-radius:16px;
   padding:2rem;max-width:400px;width:90%;text-align:center;box-shadow:var(--shadow)}
