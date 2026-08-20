@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '75';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '76';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1738,6 +1738,8 @@ const Concession = (() => {
     $('#shopClose').addEventListener('click', close);
     shop.addEventListener('click', (e) => { if (e.target === shop) close(); });
     grid.addEventListener('click', (e) => {
+      const bx = e.target.closest('[data-buymax]');
+      if (bx) { buyMax(bx.dataset.name, Number(bx.dataset.price)); return; }
       const b = e.target.closest('[data-buy]'); if (!b) return;
       buy(b.dataset.name, Number(b.dataset.price));
     });
@@ -1919,6 +1921,7 @@ const Concession = (() => {
       const transport = shipForBuy(price);
       const total = price + transport;
       const afford = Bank.balance >= total;              // il faut pouvoir payer prix + transport
+      const maxN = Math.floor(Bank.balance / total);     // nb achetable d'un coup
       const r = ratingOf(name);
       const status = t ? `<div class="shop-status transit">🚚 ${t} en livraison</div>`
         : (g ? `<div class="shop-status">🚗 ${g} au garage</div>` : '<div class="shop-status">&nbsp;</div>');
@@ -1929,9 +1932,12 @@ const Concession = (() => {
         <div class="shop-price">${fmt(price)}<span class="cur"> €</span></div>
         <div class="shop-ship">+ transport ${fmt(transport)} € · total <b>${fmt(total)} €</b></div>
         ${status}
-        <button class="shop-buy${afford ? '' : ' broke'}" data-buy="1" data-name="${escAttr(name)}" data-price="${price}" ${afford ? '' : 'disabled'}>
-          ${afford ? `🛒 Acheter — ${fmt(total)} €` : 'Solde insuffisant'}
-        </button>
+        <div class="shop-actions">
+          <button class="shop-buy${afford ? '' : ' broke'}" data-buy="1" data-name="${escAttr(name)}" data-price="${price}" ${afford ? '' : 'disabled'}>
+            ${afford ? `🛒 Acheter — ${fmt(total)} €` : 'Solde insuffisant'}
+          </button>
+          ${maxN > 1 ? `<button class="shop-buymax" data-buymax="1" data-name="${escAttr(name)}" data-price="${price}" title="Acheter le maximum">⚡ Max ×${maxN}</button>` : ''}
+        </div>
       </article>`;
     }).join('');
   };
@@ -1950,6 +1956,23 @@ const Concession = (() => {
     Bank.persist();
     Sound.play('chip');
     UI.toast(`✅ ${name} acheté · ${Bank.inventory[k].qty} au garage`, 'win');
+    render();
+  };
+
+  // Achète le MAXIMUM de ce véhicule que le solde permet (prix + transport par unité).
+  const buyMax = (name, price) => {
+    const unit = price + shipForBuy(price);
+    const n = Math.floor(Bank.balance / unit);
+    if (n <= 0) { Sound.play('lose'); UI.toast(`Solde insuffisant (${fmt(unit)} € l'unité avec transport).`, 'lose'); return; }
+    const totalCost = unit * n;
+    if (!Bank.debit(totalCost)) { UI.toast('Achat impossible.', 'lose'); return; }
+    const k = keyOf(currentCat, name);
+    if (Bank.inventory[k]) Bank.inventory[k].qty += n;
+    else Bank.inventory[k] = { cat: currentCat, name, price, qty: n };
+    Bank.logTx(-totalCost, `Achat ${name} ×${n}`);
+    Bank.persist();
+    Sound.play('jackpot'); UI.coinRain(Math.min(20, n));
+    UI.toast(`✅ ${n}× ${name} achetés (−${fmt(totalCost)} €) · ${Bank.inventory[k].qty} au garage`, 'win');
     render();
   };
 
