@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '63';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '64';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -349,6 +349,9 @@ const Sound = (() => {
     },
     setSfxVolume(x) { sfxVol = clamp(x, 0, 1); },
     kick: () => ensure(),
+    // Précharge le fichier musique dès l'ouverture (sans geste) → démarrage
+    // instantané au tout premier contact avec l'écran de lancement.
+    preload: () => { try { initMusicFile(); } catch (e) {} },
     ensureMusic: () => { if (musicOn) startMusic(); },
     // Coupe TOUT le son et libère l'AudioContext (à l'abandon d'une page)
     // → empêche une « page fantôme » de continuer à jouer après un refresh.
@@ -3197,10 +3200,20 @@ const SlotSelect = (() => {
     if (e.target.closest('button, [role=button]')) Sound.play('click');
   }, { passive: true });
 
-  // Audio : débloque au 1er geste utilisateur
-  const unlock = () => { Sound.kick(); Sound.ensureMusic(); updateAudioBtns(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+  // Précharge la musique dès l'ouverture pour un démarrage instantané.
+  Sound.preload();
+  // Audio : démarre au tout 1er geste (n'importe où sur l'écran de lancement).
+  const unlock = () => {
+    Sound.kick(); Sound.ensureMusic(); updateAudioBtns();
+    window.removeEventListener('pointerdown', unlock);
+    window.removeEventListener('touchstart', unlock);
+    window.removeEventListener('keydown', unlock);
+    window.removeEventListener('click', unlock);
+  };
   window.addEventListener('pointerdown', unlock, { once: false });
+  window.addEventListener('touchstart', unlock, { once: false, passive: true });
   window.addEventListener('keydown', unlock, { once: false });
+  window.addEventListener('click', unlock, { once: false });
   // Quitte/rafraîchit la page → on coupe tout le son pour éviter une
   // « page fantôme » qui continuerait à jouer par-dessus la nouvelle.
   window.addEventListener('pagehide', () => { try { Sound.shutdown(); } catch (e) {} });
