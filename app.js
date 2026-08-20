@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '64';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '65';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -83,6 +83,7 @@ const Sound = (() => {
   let musicElReady = false;    // true = fichier chargé et utilisable
   let usingFile = false;
   let musicFileFailed = false;   // true = aucune source lisible → repli synthé
+  let userGestured = false;      // true après le 1er geste (autorise la lecture audio)
 
   /** Prépare l'élément <audio> ; bascule musicElReady si un fichier charge. */
   const initMusicFile = () => {
@@ -104,9 +105,9 @@ const Sound = (() => {
     };
     musicEl.addEventListener('canplaythrough', () => {
       musicElReady = true;
-      // Si la musique est active et qu'on jouait l'ambiance de repli,
-      // on bascule sur la chanson dès qu'elle est prête.
-      if (musicOn && !usingFile) {
+      // On ne LANCE la chanson que si l'utilisateur a déjà interagi (règle
+      // d'autoplay). Avant le 1er geste, on se contente de bufferiser.
+      if (userGestured && musicOn && !usingFile) {
         if (musicNodes) {
           clearInterval(musicNodes.timer);
           try { musicNodes.master.gain.linearRampToValueAtTime(0.0001, (ctx?.currentTime || 0) + 0.4); } catch (e) {}
@@ -336,7 +337,7 @@ const Sound = (() => {
     reelSpin: (ms) => reelSpin(ms),
     diceTumble: (ms) => diceTumble(ms),
     duck, unduck,
-    toggleMusic() { musicOn = !musicOn; musicOn ? startMusic() : stopMusic(); return musicOn; },
+    toggleMusic() { userGestured = true; musicOn = !musicOn; musicOn ? startMusic() : stopMusic(); return musicOn; },
     toggleSfx() { sfxOn = !sfxOn; if (sfxOn) sfx.select(); return sfxOn; },
     get musicOn() { return musicOn; },
     get sfxOn() { return sfxOn; },
@@ -348,11 +349,11 @@ const Sound = (() => {
       if (musicEl) musicEl.volume = clamp(musVol / 0.55, 0, 1);
     },
     setSfxVolume(x) { sfxVol = clamp(x, 0, 1); },
-    kick: () => ensure(),
+    kick: () => { userGestured = true; ensure(); },
     // Précharge le fichier musique dès l'ouverture (sans geste) → démarrage
     // instantané au tout premier contact avec l'écran de lancement.
     preload: () => { try { initMusicFile(); } catch (e) {} },
-    ensureMusic: () => { if (musicOn) startMusic(); },
+    ensureMusic: () => { userGestured = true; if (musicOn) startMusic(); },
     // Coupe TOUT le son et libère l'AudioContext (à l'abandon d'une page)
     // → empêche une « page fantôme » de continuer à jouer après un refresh.
     shutdown: () => {
@@ -949,8 +950,7 @@ const DiceGame = (() => {
     [els.p1, els.p2, els.h1, els.h2].forEach((d) => d.classList.add('rolling'));
     els.pT.textContent = els.hT.textContent = '—';
 
-    Sound.duck();                                  // coupe la musique le temps du lancer
-    const stopDice = Sound.diceTumble(1300);       // dés qui roulent
+    const stopDice = Sound.diceTumble(1300);       // dés qui roulent (par-dessus la musique)
     for (let i = 0; i < 9; i++) {
       [els.p1, els.p2, els.h1, els.h2].forEach((d) => d.textContent = '⚀⚁⚂⚃⚄⚅'[randInt(0, 5)]);
       await wait(90 + i * 12);
@@ -986,7 +986,6 @@ const DiceGame = (() => {
       Sound.play('tie'); UI.toast('Égalité — mise remboursée');
     }
     Bank.record(net, 'Dés');
-    await wait(450); Sound.unduck();               // la musique revient après le résultat
     busy = false; els.btn.disabled = false;
   };
 
@@ -1054,7 +1053,6 @@ const Blackjack = (() => {
     const s = bet.read(); if (s === null) return;
     if (!Bank.placeBet(s)) { UI.toast('Mise refusée.', 'lose'); return; }
     stake = s; doubled = false; busy = true;
-    Sound.duck();                                  // musique coupée pendant la main
     els.deal.disabled = true; els.banner.textContent = ''; els.banner.className = 'bj-banner';
 
     deck = Cards.shuffle(Cards.freshDeck());
@@ -1137,7 +1135,6 @@ const Blackjack = (() => {
     UI.toast(msg.replace(/\s+/g, ' '), net > 0 ? 'win' : net < 0 ? 'lose' : '');
     Bank.record(net, 'Blackjack');
     phase = 'idle';
-    await wait(500); Sound.unduck();               // la musique revient à la fin de la main
   };
 
   return { init };
@@ -1238,7 +1235,6 @@ const Poker = (() => {
     if (busy) return;
     if (Bank.balance < BIG) { UI.toast('Solde insuffisant pour vous asseoir (min. ' + fmt(BIG) + ').', 'lose'); return; }
     busy = true; els.newBtn.disabled = true;
-    Sound.duck();                                  // musique coupée pendant la main
     Bank.countGame();
 
     deck = Cards.shuffle(Cards.freshDeck());
@@ -1454,7 +1450,6 @@ const Poker = (() => {
     else UI.toast('Main nulle pour vous');
 
     await wait(400);
-    Sound.unduck();                                // la musique revient à la fin de la main
     els.newBtn.disabled = false;
     busy = false;
   };
@@ -1545,9 +1540,8 @@ const Slot = (() => {
     els.spinBtn.disabled = true;
     els.readout.textContent = 'Les rouleaux tournent…'; els.readout.className = 'slot-readout';
     els.lever.classList.add('pulled');
-    Sound.duck();                                  // coupe la musique le temps du tirage
     Sound.play('lever'); await wait(180); Sound.play('launch');
-    const stopReel = Sound.reelSpin(2700);         // whirr des rouleaux qui tournent
+    const stopReel = Sound.reelSpin(2700);         // whirr des rouleaux (par-dessus la musique)
 
     // Tire les 3 symboles finaux
     // Tirage piloté par les taux visés (proportionnels : plus le lot est gros,
@@ -1622,7 +1616,6 @@ const Slot = (() => {
     }
 
     Bank.record(net, 'Machine');
-    await wait(450); Sound.unduck();               // la musique revient après le résultat
     busy = false;
     els.spinBtn.disabled = false;
   };
@@ -3187,7 +3180,7 @@ const SlotSelect = (() => {
     if (vehicle) { Concession.select(vehicle.dataset.vehicle); }
     else if (estate) { AgenceImmo.select(estate.dataset.estate); }
     else if (deal) { VenteLocation.select(deal.dataset.deal); }
-    else if (nav) { Sound.unduck(); Nav.go(nav.dataset.nav); }
+    else if (nav) { Nav.go(nav.dataset.nav); }
     else if (game) {
       const g = game.dataset.game;
       if (!Bank.isGameUnlocked(g)) { Sound.play('lose'); UI.toast(`🔒 ${gameLabel(g)} se débloque au niveau ${Bank.unlockLevel(g)}.`, 'lose'); return; }
