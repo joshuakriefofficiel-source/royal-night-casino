@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '66';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '67';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2928,13 +2928,19 @@ const Multiplayer = (() => {
   let ws = null, modal, myName = 'Joueur', peerName = '', idx = 0;
   let active = false, partnerCountry = null, code = '';
   let countryResolve = null;
-  let partnerState = null, syncTimer = null, lastSync = 0;
+  let partnerState = null, syncTimer = null, lastSync = 0, listenersWired = false;
   const DUO_GOAL = 1000000;   // objectif commun : fortune cumulée du duo
+  // Le code de la partie à 2 est enregistré DÉFINITIVEMENT ici → on peut revenir
+  // quand on veut avec le même code, sans perdre sa sauvegarde.
+  const DUO_KEY = 'rnc_duoCode';
+  const savedDuoCode = () => (localStorage.getItem(DUO_KEY) || '').toUpperCase();
+  const setDuoCode = (c) => { code = c; if (c) localStorage.setItem(DUO_KEY, c); };
 
   const init = () => {
     modal = $('#mp');
     $('#mpClose').addEventListener('click', close);
     $('#mpHost').addEventListener('click', host);
+    const rb = $('#mpResume'); if (rb) rb.addEventListener('click', resume);
     $('#mpJoinBtn').addEventListener('click', () => { screen('join'); setTimeout(() => { const f = $$('#mpCodeInput input')[0]; if (f) f.focus(); }, 50); });
     $('#mpBack').addEventListener('click', () => screen('menu'));
     $('#mpJoinGo').addEventListener('click', join);
@@ -2955,8 +2961,9 @@ const Multiplayer = (() => {
       sf.value = (localStorage.getItem('mpUrl') || '');
       sf.addEventListener('input', () => { applyServerField(); updateServerInfo(); });
     }
-    // Coupure réseau → la session se ferme (la sauvegarde reste intacte).
-    window.addEventListener('offline', () => { if (active || ws) { UI.toast('📴 Connexion perdue — session fermée. Votre sauvegarde est intacte.', 'lose'); teardown(); } });
+    // Coupure réseau : on prévient mais on NE ferme PAS la partie à 2.
+    // La reconnexion se fait via « Reprendre » ; la sauvegarde reste intacte.
+    window.addEventListener('offline', () => { if (active) { renderDuoHud(); UI.toast('📴 Connexion perdue. Reconnectez-vous via « Jouer à 2 » → « Reprendre ».', 'lose'); } });
   };
 
   // Décrit le serveur détecté + prévient si l'adresse n'est pas partageable.
@@ -2982,6 +2989,9 @@ const Multiplayer = (() => {
     myName = (Bank.company && Bank.company.name) || 'Joueur';
     $('#mpCodeBar').hidden = true;
     $('#mpOnlineNote').textContent = navigator.onLine ? '' : 'Hors ligne.';
+    // Bouton « Reprendre » si une partie à 2 a déjà été créée (code mémorisé).
+    const rb = $('#mpResume'); const sc = savedDuoCode();
+    if (rb) { rb.hidden = !sc; rb.innerHTML = sc ? `🔁 Reprendre la partie à 2 <b>${sc}</b>` : ''; }
     updateServerInfo();
     screen('menu');
     modal.classList.remove('hidden');
@@ -2992,7 +3002,9 @@ const Multiplayer = (() => {
     try { ws = new WebSocket(url()); } catch (e) { reject(e); return; }
     ws.onopen = () => resolve();
     ws.onerror = () => reject(new Error('connexion'));
-    ws.onclose = () => { if (active) { UI.toast('📴 Serveur déconnecté — session fermée (sauvegarde intacte).', 'lose'); teardown(); } };
+    // Déconnexion serveur : on NE ferme PAS la partie. On passe « hors ligne » ;
+    // le joueur continue et peut « Reprendre la partie à 2 » quand il veut.
+    ws.onclose = () => { ws = null; if (active) { renderDuoHud(); UI.toast('📴 Déconnecté du serveur. Ouvrez « Jouer à 2 » → « Reprendre » pour vous reconnecter.', 'lose'); } };
     ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } handle(m); };
   });
 
@@ -3008,6 +3020,16 @@ const Multiplayer = (() => {
     if (c.length !== 6) { UI.toast('Entrez les 6 caractères du code.', 'lose'); return; }
     try { await connect(); } catch (e) { UI.toast('Impossible de joindre le serveur (' + url() + '). Vérifiez l\'adresse dans ⚙️ Serveur.', 'lose'); return; }
     send({ type: 'join', code: c, name: myName });
+  };
+
+  // Reprendre la partie à 2 déjà créée : reconnexion avec le code mémorisé,
+  // sans onboarding et sans toucher à la sauvegarde en cours.
+  const resume = async () => {
+    applyServerField();
+    const c = savedDuoCode();
+    if (!c) { UI.toast('Aucune partie à 2 enregistrée sur cet appareil.', 'lose'); return; }
+    try { await connect(); } catch (e) { UI.toast('Impossible de joindre le serveur (' + url() + ').', 'lose'); return; }
+    send({ type: 'resume', code: c, name: myName });
   };
 
   const ready = () => { send({ type: 'ready', ready: true }); $('#mpReady').disabled = true; $('#mpP1State').textContent = 'Prêt ✔'; };
@@ -3028,11 +3050,14 @@ const Multiplayer = (() => {
   };
 
   const handle = (m) => {
-    if (m.type === 'hosted') { idx = m.idx; code = m.code; peerName = ''; showLobby(m.names); }
-    else if (m.type === 'joined') { idx = m.idx; code = m.code; peerName = m.names[0]; showLobby(m.names); }
+    if (m.type === 'hosted') { idx = m.idx; setDuoCode(m.code); peerName = ''; showLobby(m.names); }
+    else if (m.type === 'joined') { idx = m.idx; setDuoCode(m.code); peerName = m.names[0]; showLobby(m.names); }
     else if (m.type === 'peerJoined') { peerName = m.names[1]; showLobby(m.names); UI.toast(`${peerName} a rejoint la partie !`, 'win'); Sound.play('win'); }
     else if (m.type === 'peerReady') { $('#mpP2State').textContent = m.ready ? 'Prêt ✔' : 'Pas prêt'; }
     else if (m.type === 'start') { startGame(m.names); }
+    // Reconnexion à une partie existante (sans onboarding, on garde la sauvegarde).
+    else if (m.type === 'resumed') { idx = m.idx; setDuoCode(m.code); peerName = m.names[idx === 0 ? 1 : 0] || ''; resumeGame(m.names); }
+    else if (m.type === 'peerResumed') { peerName = (m.names[idx === 0 ? 1 : 0]) || peerName; UI.toast(`🔁 ${peerName || 'Votre partenaire'} est de retour !`, 'win'); Sound.play('win'); syncOut(true); renderDuoHud(); }
     else if (m.type === 'peerCountry') { partnerCountry = m.country; }
     else if (m.type === 'relay') {
       if (m.kind === 'sync') { partnerState = m.data || null; if (m.data && m.data.country) partnerCountry = m.data.country; renderDuoHud(); }
@@ -3040,29 +3065,48 @@ const Multiplayer = (() => {
     }
     else if (m.type === 'countryOk') { if (countryResolve) { countryResolve(true); countryResolve = null; } }
     else if (m.type === 'countryRejected') { if (countryResolve) { countryResolve(false); countryResolve = null; } }
-    else if (m.type === 'peerLeft') { UI.toast('Votre partenaire a quitté la partie — session fermée (sauvegarde intacte).', 'lose'); teardown(); }
+    // Le partenaire s'est déconnecté : on NE ferme PAS la partie — il peut revenir
+    // avec le même code. On continue à jouer, la sauvegarde est intacte.
+    else if (m.type === 'peerLeft') { partnerState = null; renderDuoHud(); UI.toast(`⚠️ Partenaire déconnecté. Il peut revenir avec le code ${code}.`, 'lose'); }
     else if (m.type === 'error') { UI.toast(m.error || 'Erreur.', 'lose'); }
   };
 
-  const startGame = (names) => {
+  // Démarre la couche co-op live (HUD + synchro). Appelé à la création ET à la reprise.
+  const beginCoop = () => {
     active = true;
-    peerName = names[idx === 0 ? 1 : 0];
     modal.classList.add('hidden');
-    // Si on venait de l'écran de démarrage, on révèle le jeu.
     const ss = $('#slotSelect'); if (ss) ss.classList.add('hidden');
     $('#navbar').classList.remove('hidden');
-    Nav.go('home');
-    UI.toast(`🎮 Partie à 2 lancée avec ${peerName} ! Créez votre entreprise (pays unique).`, 'win');
-    Sound.play('jackpot'); UI.coinRain(20);
-    Onboarding.start('company');   // chaque joueur crée son entreprise (pays vérifié côté serveur)
-    // Co-op live : on annonce notre état, on rafraîchit le HUD en continu.
     renderDuoHud();
-    Bank.onChange(() => { if (active) { renderDuoHud(); syncOut(); } });
-    Bank.onXp(() => { if (active) { renderDuoHud(); syncOut(); } });
+    if (!listenersWired) {   // on n'abonne les écouteurs qu'une seule fois
+      listenersWired = true;
+      Bank.onChange(() => { if (active) { renderDuoHud(); syncOut(); } });
+      Bank.onXp(() => { if (active) { renderDuoHud(); syncOut(); } });
+    }
     send({ type: 'relay', kind: 'hello' });          // demande l'état du partenaire
     syncOut(true);
     clearInterval(syncTimer);
     syncTimer = setInterval(() => { syncOut(); renderDuoHud(); }, 4000);
+  };
+
+  // 1re fois : création de la partie à 2 (chaque joueur crée son entreprise).
+  const startGame = (names) => {
+    peerName = names[idx === 0 ? 1 : 0];
+    beginCoop();
+    Nav.go('home');
+    UI.toast(`🎮 Partie à 2 lancée avec ${peerName} ! Créez votre entreprise (pays unique).`, 'win');
+    Sound.play('jackpot'); UI.coinRain(20);
+    Onboarding.start('company');   // pays vérifié côté serveur
+  };
+
+  // Reprise : on garde la sauvegarde en cours, pas d'onboarding, on re-réserve son pays.
+  const resumeGame = (names) => {
+    peerName = names[idx === 0 ? 1 : 0] || '';
+    beginCoop();
+    const myCountry = (Bank.company && Bank.company.country) || '';
+    if (myCountry && ws && ws.readyState === 1) send({ type: 'country', country: myCountry });
+    UI.toast(`🔁 Reconnecté à la partie à 2${peerName ? ' avec ' + peerName : ''} ! Votre progression est intacte.`, 'win');
+    Sound.play('win'); UI.coinRain(10);
   };
 
   // ── Synchro co-op temps réel ──────────────────────────────────────────
@@ -3117,7 +3161,9 @@ const Multiplayer = (() => {
   };
 
   const teardown = () => { active = false; partnerCountry = null; partnerState = null; code = ''; clearInterval(syncTimer); syncTimer = null; const hud = $('#duoHud'); if (hud) hud.classList.add('hidden'); try { ws && ws.close(); } catch (e) {} ws = null; modal.classList.add('hidden'); };
-  const close = () => { Sound.play('click'); teardown(); };
+  // ✕ : si une partie est en cours, on ferme juste le menu (la partie continue).
+  // Sinon (menu/salon), on referme la connexion.
+  const close = () => { Sound.play('click'); if (active) { modal.classList.add('hidden'); } else { teardown(); } };
 
   return { init, openMenu, claimCountry, get active() { return active; }, get partnerCountry() { return partnerCountry; }, get peerName() { return peerName; } };
 })();

@@ -90,6 +90,27 @@ wss.on('connection', (ws) => {
       send(ws, { type: 'countryOk', country: m.country });
       const o = peer(room, ws); if (o) send(o, { type: 'peerCountry', country: m.country });
 
+    } else if (m.type === 'resume') {
+      // Reconnexion à une partie à 2 via son code permanent.
+      const code = String(m.code || '').toUpperCase();
+      if (!code) { send(ws, { type: 'error', error: 'Code manquant.' }); return; }
+      let room = rooms.get(code);
+      if (!room) {
+        // La partie n'existe plus (serveur redémarré / vidée) : on la RECRÉE.
+        room = { code, players: [ws], names: [m.name || 'Joueur 1', ''], ready: [true, true], countries: [null, null], persistent: true };
+        rooms.set(code, room); ws._room = code; ws._idx = 0;
+        send(ws, { type: 'resumed', code, idx: 0, names: room.names, partnerPresent: false });
+      } else if (room.players.length < 2) {
+        const usedIdx = room.players.map((p) => p._idx);
+        const idx = usedIdx.includes(0) ? 1 : 0;
+        room.players.push(ws); room.names[idx] = m.name || room.names[idx] || ('Joueur ' + (idx + 1));
+        ws._room = code; ws._idx = idx;
+        send(ws, { type: 'resumed', code, idx, names: room.names, partnerPresent: true });
+        const o = peer(room, ws); if (o) send(o, { type: 'peerResumed', names: room.names });
+      } else {
+        send(ws, { type: 'error', error: 'Cette partie est déjà complète.' });
+      }
+
     } else if (m.type === 'relay') {
       const room = roomOf(ws); if (!room) return;
       const o = peer(room, ws); if (o) send(o, m);
@@ -98,9 +119,15 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     const room = roomOf(ws); if (!room) return;
-    const o = peer(room, ws);
-    if (o) send(o, { type: 'peerLeft' });
-    rooms.delete(room.code);
+    // On retire le joueur mais on GARDE la partie ouverte : le code reste valable
+    // pour revenir (persistance). Nettoyage seulement si vide depuis 15 min.
+    room.players = room.players.filter((p) => p !== ws);
+    const o = room.players[0];
+    if (o) send(o, { type: 'peerLeft', code: room.code });
+    if (room.players.length === 0) {
+      room.emptyAt = Date.now();
+      setTimeout(() => { const r = rooms.get(room.code); if (r && r.players.length === 0) rooms.delete(room.code); }, 15 * 60 * 1000);
+    }
   });
 });
 
