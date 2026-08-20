@@ -7,11 +7,31 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '72';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '73';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+/* Heure de CONFIANCE : ancrée sur l'heure du serveur + une horloge MONOTONE
+   (performance.now, insensible aux changements de date de l'appareil).
+   → empêche de relancer la roue en trafiquant l'horloge du téléphone.
+   Repli sur Date.now() seulement si le serveur est injoignable (fichier local). */
+const TrustedTime = (() => {
+  let serverBase = 0, perfBase = 0, synced = false, syncing = null;
+  const endpoint = () => ((location.protocol === 'http:' || location.protocol === 'https:') ? location.origin : 'http://localhost:8787') + '/time';
+  const sync = () => {
+    if (syncing) return syncing;
+    syncing = fetch(endpoint(), { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { if (d && typeof d.now === 'number') { serverBase = d.now; perfBase = performance.now(); synced = true; } })
+      .catch(() => {})
+      .finally(() => { syncing = null; });
+    return syncing;
+  };
+  const now = () => synced ? serverBase + (performance.now() - perfBase) : Date.now();
+  return { sync, now, get synced() { return synced; } };
+})();
 /** Entier aléatoire dans [min, max] inclus. */
 const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 /** Formatage FR des nombres (séparateur de milliers). */
@@ -493,9 +513,9 @@ const Bank = (() => {
     toggleAuto() { cur().autoOn = !cur().autoOn; save(); return cur().autoOn; },
 
     // Roue quotidienne
-    wheelReady() { return Date.now() - state.lastWheel >= DAY; },
-    wheelWaitMs() { return Math.max(0, DAY - (Date.now() - state.lastWheel)); },
-    markWheel() { state.lastWheel = Date.now(); save(); },
+    wheelReady() { return TrustedTime.now() - state.lastWheel >= DAY; },
+    wheelWaitMs() { return Math.max(0, DAY - (TrustedTime.now() - state.lastWheel)); },
+    markWheel() { state.lastWheel = TrustedTime.now(); save(); },
     // Filet de sécurité : remonte le solde au minimum garanti si on est à sec.
     get rescueFloor() { return RESCUE_FLOOR; },
     // Disponible uniquement quand on n'a plus d'argent du tout.
@@ -2848,8 +2868,7 @@ const DailyWheel = (() => {
     return `${h} h ${m.toString().padStart(2, '0')} min`;
   };
 
-  const open = () => {
-    Sound.play('select');
+  const renderState = () => {
     $('#wheelResult').textContent = '';
     if (Bank.wheelReady()) {
       $('#wheelSub').textContent = 'Tournez la roue pour gagner un lot !';
@@ -2858,7 +2877,16 @@ const DailyWheel = (() => {
       $('#wheelSub').textContent = `Déjà tournée aujourd'hui. Revenez dans ${waitLabel()}.`;
       spinBtn.disabled = true; spinBtn.textContent = 'REVENEZ DEMAIN';
     }
+    refreshBadge();
+  };
+  const open = () => {
+    Sound.play('select');
     modal.classList.remove('hidden');
+    // On (re)synchronise l'heure serveur avant de décider si la roue est dispo,
+    // pour que changer la date de l'appareil ne débloque pas la roue.
+    spinBtn.disabled = true; $('#wheelSub').textContent = 'Vérification de l\'heure…';
+    TrustedTime.sync().then(renderState);
+    renderState();   // affichage immédiat (sera corrigé après la synchro)
   };
 
   const pickPrize = () => {
@@ -2869,7 +2897,14 @@ const DailyWheel = (() => {
   };
 
   const spin = async () => {
-    if (busy || !Bank.wheelReady()) return;
+    if (busy) return;
+    // En ligne : on EXIGE l'heure serveur (impossible à trafiquer via la date du tel).
+    if ((location.protocol === 'http:' || location.protocol === 'https:') && !TrustedTime.synced) {
+      spinBtn.disabled = true; $('#wheelSub').textContent = 'Vérification de l\'heure…';
+      await TrustedTime.sync();
+      if (!TrustedTime.synced) { UI.toast('⏳ Impossible de vérifier l\'heure du serveur — réessayez dans un instant.', 'lose'); renderState(); return; }
+    }
+    if (!Bank.wheelReady()) { renderState(); return; }
     busy = true; spinBtn.disabled = true; $('#wheelResult').textContent = '';
     const prize = pickPrize();
     const i = ORDER.indexOf(prize);
@@ -3563,6 +3598,8 @@ const SlotSelect = (() => {
   Automation.init();
   DailyWheel.init();
   Auction.init();
+  TrustedTime.sync();                          // heure serveur (anti-triche roue)
+  setInterval(() => TrustedTime.sync(), 300000); // re-synchro toutes les 5 min
   AgenceImmo.init();
   VenteLocation.init();
   Onboarding.init();

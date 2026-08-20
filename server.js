@@ -28,6 +28,11 @@ const MIME = {
 /* ── Serveur HTTP : sert les fichiers statiques du jeu ─────────────────── */
 const server = http.createServer((req, res) => {
   if (req.url === '/health') { res.writeHead(200); res.end('ok'); return; }
+  // Heure serveur (anti-triche roue quotidienne) — non falsifiable côté client.
+  if ((req.url || '').split('?')[0] === '/time') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ now: Date.now() })); return;
+  }
   let p = decodeURIComponent((req.url || '/').split('?')[0]);
   if (p === '/' || p === '') p = '/index.html';
   // Empêche toute remontée hors du dossier.
