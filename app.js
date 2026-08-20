@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '70';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '71';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -3055,9 +3055,19 @@ const Multiplayer = (() => {
   const rankFor = (t) => t >= 5000000 ? 'Empereurs du commerce' : t >= 1500000 ? 'Magnats' : t >= 100000 ? 'Négociants' : 'Novices';
   // Bonus de vente partagé accordé par les paliers (appliqué à l'Import/Export).
   const saleBonus = () => (active && tierReached > 0) ? TIERS[tierReached - 1].bonus : 0;
-  // Crédite les récompenses de palier franchies (chaque joueur pour lui-même).
+  let tiersBaselined = false;
+  // Crédite les récompenses de palier UNIQUEMENT pour les nouveaux franchissements.
+  // Au 1er passage (chargement/reconnexion), on cale la référence SANS payer, pour
+  // qu'un coffre déjà rempli ne verse jamais d'argent rétroactivement.
   const checkTiers = () => {
+    if (!active) return;
     const total = vaultTotal();
+    const metCount = TIERS.filter((t) => total >= t.at).length;
+    if (!tiersBaselined) {                 // référence initiale : aucune prime
+      tiersBaselined = true;
+      if (metCount > tierReached) { tierReached = metCount; saveTier(); }
+      return;
+    }
     let reached = tierReached;
     while (reached < TIERS.length && total >= TIERS[reached].at) {
       const t = TIERS[reached];
@@ -3117,6 +3127,12 @@ const Multiplayer = (() => {
     const gM = $('#duoGiftMoneyBtn'); if (gM) gM.addEventListener('click', () => { const el = $('#duoGiftMoney'); sendMoney(el.value); el.value = ''; });
     const gV = $('#duoGiftVehicleBtn'); if (gV) gV.addEventListener('click', () => { const el = $('#duoGiftVehicle'); if (el && el.value) sendVehicle(el.value); });
     const em = $('#duoEmotes'); if (em) em.addEventListener('click', (e) => { const b = e.target.closest('[data-emote]'); if (b) sendEmote(b.dataset.emote); });
+    // Replier/déplier le HUD Duo (tap sur l'entête) — évite d'encombrer, surtout mobile.
+    const dhHead = $('#duoHud .duo-head');
+    if (dhHead) dhHead.addEventListener('click', () => {
+      const h = $('#duoHud'); h.classList.toggle('collapsed');
+      localStorage.setItem('rnc_duoCollapsed', h.classList.contains('collapsed') ? '1' : '0');
+    });
     // Saisie du code : passage auto d'une case à l'autre.
     const inputs = $$('#mpCodeInput input');
     inputs.forEach((inp, i) => {
@@ -3261,6 +3277,11 @@ const Multiplayer = (() => {
     $('#navbar').classList.remove('hidden');
     loadTier();                 // charge le palier de coffre déjà atteint (ce duo)
     loadContract();             // charge le contrat en cours (ce duo)
+    tiersBaselined = false;     // recale la référence des paliers (aucune prime rétroactive)
+    // Replié par défaut sur mobile (moins encombrant) ; sinon selon la préférence.
+    const pref = localStorage.getItem('rnc_duoCollapsed');
+    const hud = $('#duoHud');
+    if (hud) hud.classList.toggle('collapsed', pref === '1' || (pref === null && window.innerWidth <= 720));
     renderDuoHud();
     if (!listenersWired) {   // on n'abonne les écouteurs qu'une seule fois
       listenersWired = true;

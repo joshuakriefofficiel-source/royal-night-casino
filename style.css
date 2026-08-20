@@ -601,7 +601,11 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
   background:linear-gradient(180deg,rgba(24,22,17,.96),rgba(14,13,11,.96));
   border:1px solid var(--gold-deep);border-radius:14px;padding:.8rem .9rem;
   box-shadow:0 10px 34px rgba(0,0,0,.5);backdrop-filter:blur(8px);font-size:.85rem}
-.duo-head{font-family:var(--font-display);color:var(--gold-2);letter-spacing:.04em;display:flex;align-items:center;gap:.4rem;margin-bottom:.55rem}
+.duo-head{font-family:var(--font-display);color:var(--gold-2);letter-spacing:.04em;display:flex;align-items:center;gap:.4rem;margin-bottom:.55rem;cursor:pointer;user-select:none}
+.duo-head::after{content:'▾';margin-left:.2rem;opacity:.6;transition:transform .2s}
+.duo-hud.collapsed .duo-head{margin-bottom:0}
+.duo-hud.collapsed .duo-head::after{transform:rotate(-90deg)}
+.duo-hud.collapsed .duo-row,.duo-hud.collapsed .duo-goal,.duo-hud.collapsed .duo-emotes,.duo-hud.collapsed .duo-open{display:none}
 .duo-link{margin-left:auto;font-size:.72rem;color:#7fe0a0}
 .duo-link.off{color:#e2907f}
 .duo-row{display:flex;justify-content:space-between;gap:.6rem;margin-bottom:.6rem}
@@ -939,6 +943,14 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
     padding:.42rem .8rem;font-size:.82rem;background:var(--glass);border:1px solid var(--line)}
   .home-stats{gap:1.4rem}
   .dice-vs{width:100%;order:2}
+  /* HUD Duo compact sur mobile pour ne pas encombrer */
+  .duo-hud{width:min(230px,72vw);left:8px;bottom:8px;padding:.55rem .6rem;font-size:.78rem}
+  .duo-emotes button{padding:.22rem 0;font-size:.9rem}
+  .duo-open{padding:.4rem;font-size:.75rem}
+  .duo-panel-box{padding:1rem}
+  .duo-vault-total{font-size:1.6rem}
+  .duo-deposit{flex-wrap:wrap}
+  .duo-deposit .btn-primary,.duo-deposit .btn-ghost{flex:1}
 }
 @media (max-width:480px){
   .bet-input{width:84px}
