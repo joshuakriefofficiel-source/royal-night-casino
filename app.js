@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '65';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '66';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1958,12 +1958,21 @@ const ImportExport = (() => {
   ];
   const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
   const TAX = 0.05;  // droits de douane à l'export (réduits)
-  // Demande de base par pays/modèle : 0,80 – 1,50 (marges plus favorables).
-  const demandFactor = (country, name) => 0.80 + (hash(country + '»' + name) % 71) / 100;
-  // Fluctuation du marché dans le temps (±20 %, cycle ~4 min) : le bon marché change.
-  const marketWave = (country, name) => 1 + 0.2 * Math.sin(((hash(name + '~' + country) % 1000) / 159) + Date.now() / 40000);
-  // Prix de vente unitaire brut (avant douane).
-  const grossUnit = (country, name, base) => Math.round(base * demandFactor(country, name) * marketWave(country, name));
+  // ── Demande ALÉATOIRE par pays × véhicule, qui change toutes les 5 min ────
+  // Stable pendant 5 min (fini le prix qui bouge à chaque clic) puis re-tirée.
+  const EPOCH_MS = 5 * 60 * 1000;
+  const demandEpoch = () => Math.floor(Date.now() / EPOCH_MS);
+  // 0,70 – 1,65 : certains véhicules sont bien plus demandés dans certains pays.
+  const demandFactor = (country, name) => 0.70 + (hash(country + '»' + name + '#' + demandEpoch()) % 96) / 100;
+  // Niveau de demande lisible (pour l'affichage) : 1 (faible) … 5 (brûlante).
+  const demandLevel = (country, name) => {
+    const f = demandFactor(country, name);
+    return f >= 1.45 ? 5 : f >= 1.25 ? 4 : f >= 1.05 ? 3 : f >= 0.88 ? 2 : 1;
+  };
+  // Temps restant (ms) avant le prochain tirage de la demande.
+  const demandResetIn = () => EPOCH_MS - (Date.now() % EPOCH_MS);
+  // Prix de vente unitaire brut (avant douane), piloté par la demande du moment.
+  const grossUnit = (country, name, base) => Math.round(base * demandFactor(country, name));
   // Prix net encaissé (après douane).
   const netUnit = (country, name, base) => Math.round(grossUnit(country, name, base) * (1 - TAX));
 
@@ -1976,7 +1985,7 @@ const ImportExport = (() => {
   };
 
   let CENTROID = {}, ALL = [];
-  let els = {}, mode = 'export', cat = 'voiture', partner = '', dist = 0, delayMs = 0, shipBase = 0, duoDeal = false;
+  let els = {}, mode = 'export', cat = 'voiture', partner = '', dist = 0, delayMs = 0, shipBase = 0, duoDeal = false, lastEpoch = -1;
   // Vente nette : douane 0 % + bonus quand on commerce avec le partenaire de duo.
   const saleNet = (name, base) => duoDeal ? Math.round(grossUnit(partner, name, base) * 1.15) : netUnit(partner, name, base);
   // Transport d'UN véhicule : part fixe distance + 0,6 % de la valeur (réduit).
@@ -1992,9 +2001,13 @@ const ImportExport = (() => {
       origin: $('#ieOrigin'), search: $('#iePartnerSearch'), suggest: $('#iePartnerSuggest'),
       route: $('#ieRoute'), cats: $('#ieCats'), goods: $('#ieGoods'),
       warehouse: $('#ieWarehouse'), shipments: $('#ieShipments'), tabs: $$('.ie-tab'),
+      markets: $('#ieMarkets'), marketsSub: $('#ieMarketsSub'), demandTimer: $('#ieDemandTimer'),
     };
     els.search.addEventListener('input', () => suggestPartners(els.search.value.trim().toLowerCase()));
     els.tabs.forEach((t) => t.addEventListener('click', () => setMode(t.dataset.tab)));
+    if (els.markets) els.markets.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-c]'); if (row) selectPartner(row.dataset.c);
+    });
     els.cats.innerHTML = CATS.map(([id, name, ico], i) =>
       `<button class="ie-cat${i === 1 ? ' active' : ''}" data-cat="${id}">${ico} ${name}</button>`).join('');
     els.cats.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (b) setCat(b.dataset.cat); });
@@ -2035,7 +2048,7 @@ const ImportExport = (() => {
         + (duoDeal ? `<span class="ie-duo">🤝 partenaire duo — commerce réduit</span>` : '');
     }
     Sound.play('select');
-    renderGoods();
+    renderGoods(); renderMarkets();
   };
 
   const setMode = (m) => {
@@ -2046,7 +2059,7 @@ const ImportExport = (() => {
   const setCat = (c) => {
     cat = c; Sound.play('click');
     $$('.ie-cat', els.cats).forEach((b) => b.classList.toggle('active', b.dataset.cat === c));
-    renderGoods();
+    renderGoods(); renderMarkets();
   };
 
   // Clé unique d'un véhicule en stock.
@@ -2073,16 +2086,70 @@ const ImportExport = (() => {
         const net = saleNet(v.name, v.price);                   // encaissé après douane (bonus duo éventuel)
         const profit = net - v.price - shipFor(v.price);        // net − prix payé − transport
         const win = profit >= 0;
-        const hot = demandFactor(partner, v.name) >= 1.25;
+        const lvl = demandLevel(partner, v.name);
+        const flames = '🔥'.repeat(Math.max(0, lvl - 3));
+        const badge = lvl >= 4 ? ` <b class="ie-hot">${flames} forte demande</b>` : (lvl <= 1 ? ' <b class="ie-cold">faible demande</b>' : '');
         return `<div class="ie-good">
           <span class="ie-g-img">${Concession.svg(v.cat, v.name)}</span>
-          <span class="ie-g-name">${v.name}${hot ? ' <b class="ie-hot">forte demande</b>' : ''} <small>· stock : ${v.qty} · payé ${fmt(v.price)} €</small></span>
+          <span class="ie-g-name">${v.name}${badge} <small>· stock : ${v.qty} · payé ${fmt(v.price)} €</small></span>
           <span class="ie-g-price">${fmt(net)} €<small class="${win ? 'ie-profit' : 'ie-loss'}"> (${win ? '+' : ''}${fmt(profit)})</small></span>
           <span class="ie-g-qty"><input type="number" min="1" max="${v.qty}" value="1" class="ie-qty" data-k="${keyOf(v.cat, v.name).replace(/"/g, '&quot;')}"></span>
           <button class="ie-g-btn sell" data-act="sell" data-name="${v.name.replace(/"/g, '&quot;')}">📤 Exporter</button>
         </div>`;
       }).join('');
     }
+  };
+
+  // Net encaissé pour un pays quelconque (utilisé par le tableau des marchés).
+  const netForCountry = (country, name, base) =>
+    (Multiplayer.active && country === Multiplayer.partnerCountry)
+      ? Math.round(grossUnit(country, name, base) * 1.15)              // bonus duo (douane 0 %)
+      : Math.round(grossUnit(country, name, base) * (1 - TAX));
+
+  // Tableau défilable : TOUS les pays + le bénéfice qu'ils rapportent,
+  // pour les véhicules de la catégorie choisie (cliquer un pays le sélectionne).
+  const renderMarkets = () => {
+    if (!els.markets) return;
+    const me = originCountry(); const meC = CENTROID[me];
+    const meta = Concession.catMeta[cat];
+    if (els.marketsSub) els.marketsSub.textContent = meta ? '· ' + meta.name : '';
+    if (!meC) { els.markets.innerHTML = '<p class="ie-hint">Créez d\'abord votre entreprise.</p>'; return; }
+    const owned = Object.values(Bank.inventory).filter((v) => v && v.cat === cat && v.qty > 0);
+    if (!owned.length) {
+      els.markets.innerHTML = `<p class="ie-hint">Aucun ${meta ? meta.name.toLowerCase() : 'véhicule'} en stock — achetez-en à la Concession pour voir les meilleurs marchés.</p>`;
+      return;
+    }
+    const rows = [];
+    for (const country of ALL) {
+      if (country === me) continue;
+      const pc = CENTROID[country]; if (!pc) continue;
+      const d = haversine(meC, pc);
+      let best = null;
+      for (const v of owned) {
+        const net = netForCountry(country, v.name, v.price);
+        const profit = net - v.price - shipCostFor(d, v.price);
+        if (!best || profit > best.profit) best = { profit, name: v.name, lvl: demandLevel(country, v.name) };
+      }
+      rows.push({ country, profit: best.profit, name: best.name, lvl: best.lvl });
+    }
+    rows.sort((a, b) => b.profit - a.profit);
+    els.markets.innerHTML = rows.map((r) => {
+      const win = r.profit >= 0;
+      const flames = '🔥'.repeat(Math.max(0, r.lvl - 3));   // niveau 4 → 1 flamme, 5 → 2
+      const sel = r.country === partner ? ' sel' : '';
+      return `<button class="ie-mkt-row${win ? '' : ' loss'}${sel}" data-c="${r.country.replace(/"/g, '&quot;')}">
+        <span class="ie-mkt-country">${r.country}${flames ? ' <span class="ie-mkt-hot">' + flames + '</span>' : ''}</span>
+        <span class="ie-mkt-veh">${r.name}</span>
+        <span class="ie-mkt-profit ${win ? 'ie-profit' : 'ie-loss'}">${win ? '+' : ''}${fmt(r.profit)} €</span>
+      </button>`;
+    }).join('');
+  };
+
+  const updateDemandTimer = () => {
+    if (!els.demandTimer) return;
+    const s = Math.ceil(demandResetIn() / 1000);
+    const m = Math.floor(s / 60), ss = s % 60;
+    els.demandTimer.textContent = `⏳ nouvelle demande dans ${m}:${String(ss).padStart(2, '0')}`;
   };
 
   const onGoodsClick = (e) => {
@@ -2127,12 +2194,24 @@ const ImportExport = (() => {
       Bank.shipments.push({ id: Date.now() + Math.random(), type: 'export', cat, name, qty, partner, arriveAt: Date.now() + delayMs, value: revenue });
       Bank.persist();
       Sound.play('chip');
-      UI.toast(`🚢 ${qty}× ${name} → ${partner} (douane 12 %) — paiement à l'arrivée.`, profit >= 0 ? 'win' : 'lose');
-      renderShipments(); renderWarehouse(); renderGoods();
+      UI.toast(`🚢 ${qty}× ${name} → ${partner} — paiement à l'arrivée.`, profit >= 0 ? 'win' : 'lose');
+      renderShipments(); renderWarehouse(); renderGoods(); renderMarkets();
     });
   };
 
   const tick = () => {
+    // Minuteur de demande + re-tirage toutes les 5 min (marchés & prix rafraîchis).
+    updateDemandTimer();
+    const ep = demandEpoch();
+    if (lastEpoch === -1) lastEpoch = ep;
+    else if (ep !== lastEpoch) {
+      lastEpoch = ep;
+      if (Nav.current === 'importexport') {
+        if (partner) renderGoods();
+        renderMarkets();
+        UI.toast('🔄 La demande mondiale a changé — nouveaux marchés !', 'win');
+      }
+    }
     const ships = Bank.shipments;
     if (!ships || !ships.length) return;
     const now = Date.now();
@@ -2159,7 +2238,7 @@ const ImportExport = (() => {
       }
     }
     if (changed) {
-      Bank.persist(); renderWarehouse(); renderGoods();
+      Bank.persist(); renderWarehouse(); renderGoods(); renderMarkets();
       if (Concession.isShopOpen && Concession.isShopOpen()) Concession.refreshShop();
     }
     renderShipments();
@@ -2202,8 +2281,8 @@ const ImportExport = (() => {
   const onEnter = () => {
     const me = originCountry();
     els.origin.textContent = me ? `Depuis : ${me} (votre entreprise)` : 'Depuis : —';
-    renderWarehouse(); renderShipments();
-    if (partner) renderGoods(); else els.goods.innerHTML = '<p class="ie-hint">Choisissez un pays partenaire ci-dessus pour démarrer.</p>';
+    renderWarehouse(); renderShipments(); renderMarkets(); updateDemandTimer();
+    if (partner) renderGoods(); else els.goods.innerHTML = '<p class="ie-hint">Choisissez un pays partenaire ci-dessus, ou cliquez un pays dans le tableau des bénéfices ci-dessous.</p>';
   };
 
   // Coût de transport pour une distance donnée (utilisé par l'automatisation).

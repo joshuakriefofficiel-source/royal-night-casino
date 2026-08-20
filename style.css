@@ -254,6 +254,29 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .ie-g-name small{color:var(--txt-dim)}
 .ie-deal{color:#7fe0a0;font-size:.72rem;letter-spacing:.04em;background:rgba(63,174,107,.14);padding:.05rem .4rem;border-radius:5px}
 .ie-hot{color:#ffcf6a;font-size:.72rem;letter-spacing:.04em;background:rgba(217,180,91,.14);padding:.05rem .4rem;border-radius:5px}
+.ie-cold{color:#8aa0b8;font-size:.72rem;letter-spacing:.04em;background:rgba(120,140,170,.12);padding:.05rem .4rem;border-radius:5px}
+
+/* ─── Tableau des marchés (bénéfices par pays, défilable) ─── */
+.ie-markets-panel{background:var(--glass);border:1px solid var(--line);border-radius:16px;padding:1rem;margin:1rem 0}
+.ie-markets-head{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;flex-wrap:wrap;margin-bottom:.6rem}
+.ie-markets-head .ie-panel-h{margin-bottom:0}
+.ie-panel-h small{color:var(--txt-dim);font-family:var(--font-ui);font-weight:400;letter-spacing:0}
+.ie-demand-timer{color:#ffcf6a;font-size:.78rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ie-markets{max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:.3rem;
+  -webkit-overflow-scrolling:touch;padding-right:.25rem}
+.ie-markets::-webkit-scrollbar{width:8px}
+.ie-markets::-webkit-scrollbar-thumb{background:rgba(217,180,91,.25);border-radius:8px}
+.ie-mkt-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:.6rem;width:100%;
+  background:#0d0d10;border:1px solid var(--line);border-radius:10px;padding:.55rem .8rem;cursor:pointer;
+  text-align:left;transition:border-color .2s,background .2s}
+.ie-mkt-row:hover{border-color:var(--gold);background:#14130f}
+.ie-mkt-row.sel{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold-deep)}
+.ie-mkt-row.loss{opacity:.72}
+.ie-mkt-country{color:var(--txt);font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ie-mkt-hot{font-size:.8rem}
+.ie-mkt-veh{color:var(--txt-dim);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38vw}
+.ie-mkt-profit{font-variant-numeric:tabular-nums;font-weight:700;font-size:.9rem;white-space:nowrap}
+@media (max-width:640px){.ie-mkt-veh{display:none}.ie-mkt-row{grid-template-columns:1fr auto}}
 .ie-g-price{color:var(--gold-2);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .ie-g-price small{color:var(--txt-dim);font-weight:400;font-size:.72rem}
 .ie-qty{width:56px;background:#0a0a0d;border:1px solid var(--line);border-radius:8px;color:var(--gold-2);
