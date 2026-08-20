@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '71';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '72';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -3027,7 +3027,7 @@ const Multiplayer = (() => {
   let ws = null, modal, myName = 'Joueur', peerName = '', idx = 0;
   let active = false, partnerCountry = null, code = '';
   let countryResolve = null;
-  let partnerState = null, syncTimer = null, lastSync = 0, listenersWired = false;
+  let partnerState = null, syncTimer = null, lastSync = 0, listenersWired = false, keepAlive = null;
   const DUO_GOAL = 1000000;   // objectif commun : fortune cumulée du duo
   // Le code de la partie à 2 est enregistré DÉFINITIVEMENT ici → on peut revenir
   // quand on veut avec le même code, sans perdre sa sauvegarde.
@@ -3187,11 +3187,25 @@ const Multiplayer = (() => {
 
   const connect = () => new Promise((resolve, reject) => {
     try { ws = new WebSocket(url()); } catch (e) { reject(e); return; }
-    ws.onopen = () => resolve();
+    ws.onopen = () => {
+      // Keepalive : garde la connexion vivante (Render/mobile coupent les WS inactifs).
+      clearInterval(keepAlive);
+      keepAlive = setInterval(() => { try { if (ws && ws.readyState === 1) ws.send('{"type":"ping"}'); } catch (e) {} }, 25000);
+      resolve();
+    };
     ws.onerror = () => reject(new Error('connexion'));
-    // Déconnexion serveur : on NE ferme PAS la partie. On passe « hors ligne » ;
-    // le joueur continue et peut « Reprendre la partie à 2 » quand il veut.
-    ws.onclose = () => { ws = null; if (active) { renderDuoHud(); UI.toast('📴 Déconnecté du serveur. Ouvrez « Jouer à 2 » → « Reprendre » pour vous reconnecter.', 'lose'); } };
+    ws.onclose = () => {
+      clearInterval(keepAlive); keepAlive = null;
+      const wasWs = ws; ws = null;
+      if (active) {
+        renderDuoHud();
+        UI.toast('📴 Déconnecté du serveur. Ouvrez « Jouer à 2 » → « Reprendre » pour vous reconnecter.', 'lose');
+      } else if (wasWs && modal && !modal.classList.contains('hidden')) {
+        // Coupure pendant le salon/menu → on prévient et on revient au menu.
+        UI.toast('📴 Connexion au serveur perdue. Réessayez « Héberger » ou « Rejoindre ».', 'lose');
+        screen('menu');
+      }
+    };
     ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } handle(m); };
   });
 
@@ -3219,7 +3233,14 @@ const Multiplayer = (() => {
     send({ type: 'resume', code: c, name: myName });
   };
 
-  const ready = () => { send({ type: 'ready', ready: true }); $('#mpReady').disabled = true; $('#mpP1State').textContent = 'Prêt ✔'; };
+  const ready = () => {
+    if (!ws || ws.readyState !== 1) {   // connexion tombée : on ne bloque pas silencieusement
+      UI.toast('📴 Connexion au serveur perdue. Revenez au menu et refaites « Héberger/Rejoindre ».', 'lose');
+      screen('menu'); return;
+    }
+    send({ type: 'ready', ready: true });
+    $('#mpReady').disabled = true; $('#mpP1State').textContent = 'Prêt ✔';
+  };
 
   const send = (obj) => { try { ws.send(JSON.stringify(obj)); } catch (e) {} };
 
