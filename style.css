@@ -878,6 +878,7 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
   background:linear-gradient(180deg,#f0a92e,#d5891a);color:#3a2708;border:1px solid #c67d17;transition:.2s}
 .shop-buymax:hover{background:linear-gradient(180deg,#ffbb3d,#e0951f);transform:translateY(-1px)}
 .shop-buymax:active{transform:scale(.96)}
+.shop-buymax:disabled{background:#eef1f5;color:#9aa6b5;border-color:#e3eaf3;cursor:not-allowed;transform:none}
 .shop-empty{grid-column:1/-1;text-align:center;color:#5b7ba3;padding:2.5rem 1rem;font-size:1.05rem;line-height:1.7}
 .shop-empty b{color:#123a6b}
 .store-foot{text-align:center;color:#8aa0bd;font-size:.8rem;padding:1rem;border-top:1px solid #e3eaf3;background:#fff}

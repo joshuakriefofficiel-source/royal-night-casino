@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '77';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '78';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1936,7 +1936,7 @@ const Concession = (() => {
           <button class="shop-buy${afford ? '' : ' broke'}" data-buy="1" data-name="${escAttr(name)}" data-price="${price}" ${afford ? '' : 'disabled'}>
             ${afford ? `🛒 Acheter — ${fmt(total)} €` : 'Solde insuffisant'}
           </button>
-          ${maxN > 1 ? `<button class="shop-buymax" data-buymax="1" data-name="${escAttr(name)}" data-price="${price}" title="Acheter le maximum">⚡ Max ×${maxN}</button>` : ''}
+          <button class="shop-buymax" data-buymax="1" data-name="${escAttr(name)}" data-price="${price}" title="Acheter le maximum" ${afford ? '' : 'disabled'}>⚡ Max${afford ? ` ×${maxN}` : ''}</button>
         </div>
       </article>`;
     }).join('');
