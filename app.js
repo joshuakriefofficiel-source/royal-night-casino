@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '78';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '79';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2083,8 +2083,8 @@ const ImportExport = (() => {
       dist = haversine(meC, pC);
       delayMs = clamp(6000 + dist * 3, 6000, 80000);
       shipBase = 40 + Math.round(dist * 0.025);    // part fixe du transport (distance, réduite)
-      // Bonus DUO : commerce entre les 2 pays du duo → transport et délais fortement réduits.
-      duoDeal = Multiplayer.active && name === Multiplayer.partnerCountry;
+      // Bonus GROUPE : commerce vers le pays d'un membre → transport et délais réduits.
+      duoDeal = Multiplayer.active && Multiplayer.isMemberCountry && Multiplayer.isMemberCountry(name);
       if (duoDeal) { delayMs = Math.round(delayMs * 0.4); shipBase = Math.round(shipBase * 0.4); }
       const days = Math.max(1, Math.round(dist / 800));
       els.route.hidden = false;
@@ -2149,8 +2149,8 @@ const ImportExport = (() => {
 
   // Net encaissé pour un pays quelconque (utilisé par le tableau des marchés).
   const netForCountry = (country, name, base) =>
-    (Multiplayer.active && country === Multiplayer.partnerCountry)
-      ? Math.round(grossUnit(country, name, base) * 1.15 * duoMult())   // bonus duo (douane 0 %) + paliers
+    (Multiplayer.active && Multiplayer.isMemberCountry && Multiplayer.isMemberCountry(country))
+      ? Math.round(grossUnit(country, name, base) * 1.15 * duoMult())   // bonus groupe (douane 0 %) + paliers
       : Math.round(grossUnit(country, name, base) * (1 - TAX) * duoMult());
 
   // Tableau défilable : TOUS les pays + le bénéfice qu'ils rapportent,
@@ -3108,26 +3108,36 @@ const Multiplayer = (() => {
     const srv = normalizeServer(el.value);
     if (srv) localStorage.setItem('mpUrl', srv); else localStorage.removeItem('mpUrl');
   };
-  let ws = null, modal, myName = 'Joueur', peerName = '', idx = 0;
-  let active = false, partnerCountry = null, code = '';
+  let ws = null, modal, myName = 'Joueur', idx = 0;
+  let active = false, code = '';
   let countryResolve = null;
-  let partnerState = null, syncTimer = null, lastSync = 0, listenersWired = false, keepAlive = null;
-  const DUO_GOAL = 1000000;   // objectif commun : fortune cumulée du duo
-  // Le code de la partie à 2 est enregistré DÉFINITIVEMENT ici → on peut revenir
-  // quand on veut avec le même code, sans perdre sa sauvegarde.
+  // Groupe : jusqu'à 10 joueurs. peers = état des AUTRES membres (idx -> snapshot).
+  let peers = {};                 // idx -> {name,country,balance,level,deposited}
+  let membersList = [];           // dernier état du groupe [{idx,name,ready,country}]
+  let syncTimer = null, lastSync = 0, listenersWired = false, keepAlive = null;
+  const MAXP = 10, MINP = 2;
+  // Nombre de joueurs dans le groupe (au moins moi).
+  const groupSize = () => Math.max(1, membersList.length || (1 + Object.keys(peers).length));
+  // Difficulté : plus il y a de monde, plus les objectifs/bonus sont durs à finir.
+  // 2 joueurs → ×1 (référence) ; chaque joueur en plus corse l'objectif.
+  const diffScale = () => 1 + 0.6 * Math.max(0, groupSize() - 2);
+  // Pays de TOUS les autres membres (pour le bonus de commerce inter-groupe).
+  const memberCountries = () => Object.values(peers).map((p) => p && p.country).filter(Boolean);
+  const isMemberCountry = (c) => c && memberCountries().includes(c);
+
+  // Le code du groupe est enregistré DÉFINITIVEMENT → on revient quand on veut.
   const DUO_KEY = 'rnc_duoCode';
   const savedDuoCode = () => (localStorage.getItem(DUO_KEY) || '').toUpperCase();
   const setDuoCode = (c) => { code = c; if (c) localStorage.setItem(DUO_KEY, c); loadTier(); };
 
-  // ── Coffre du Duo + Rang + paliers de bonus (partagés) ────────────────────
-  // Chaque joueur mémorise SA contribution (par code de partie) ; le total du
-  // coffre = ma contribution + celle du partenaire (reçue par la synchro).
+  // ── Coffre du groupe + Rang + paliers de bonus (partagés, mise à l'échelle) ─
   const TIERS = [
     { at: 100000,   bonus: 0.03, reward: 15000,  rank: 'Négociants' },
     { at: 500000,   bonus: 0.06, reward: 60000,  rank: 'Négociants' },
     { at: 1500000,  bonus: 0.10, reward: 200000, rank: 'Magnats' },
     { at: 5000000,  bonus: 0.15, reward: 700000, rank: 'Empereurs du commerce' },
   ];
+  const tierAt = (i) => Math.round(TIERS[i].at * diffScale());   // seuil ajusté au groupe
   let tierReached = 0;
   const depoKey = () => 'rnc_vault_' + (savedDuoCode() || 'x');
   const tierKey = () => 'rnc_vtier_' + (savedDuoCode() || 'x');
@@ -3135,8 +3145,9 @@ const Multiplayer = (() => {
   const setMyDeposited = (v) => localStorage.setItem(depoKey(), String(Math.max(0, Math.round(v))));
   const loadTier = () => { tierReached = Number(localStorage.getItem(tierKey()) || 0); };
   const saveTier = () => localStorage.setItem(tierKey(), String(tierReached));
-  const vaultTotal = () => myDeposited() + ((partnerState && partnerState.deposited) || 0);
-  const rankFor = (t) => t >= 5000000 ? 'Empereurs du commerce' : t >= 1500000 ? 'Magnats' : t >= 100000 ? 'Négociants' : 'Novices';
+  // Coffre = ma contribution + celle de TOUS les membres du groupe.
+  const vaultTotal = () => myDeposited() + Object.values(peers).reduce((a, p) => a + ((p && p.deposited) || 0), 0);
+  const rankFor = (t) => t >= tierAt(3) ? 'Empereurs du commerce' : t >= tierAt(2) ? 'Magnats' : t >= tierAt(0) ? 'Négociants' : 'Novices';
   // Bonus de vente partagé accordé par les paliers (appliqué à l'Import/Export).
   const saleBonus = () => (active && tierReached > 0) ? TIERS[tierReached - 1].bonus : 0;
   let tiersBaselined = false;
@@ -3146,17 +3157,17 @@ const Multiplayer = (() => {
   const checkTiers = () => {
     if (!active) return;
     const total = vaultTotal();
-    const metCount = TIERS.filter((t) => total >= t.at).length;
+    const metCount = TIERS.filter((t, i) => total >= tierAt(i)).length;
     if (!tiersBaselined) {                 // référence initiale : aucune prime
       tiersBaselined = true;
       if (metCount > tierReached) { tierReached = metCount; saveTier(); }
       return;
     }
     let reached = tierReached;
-    while (reached < TIERS.length && total >= TIERS[reached].at) {
+    while (reached < TIERS.length && total >= tierAt(reached)) {
       const t = TIERS[reached];
-      Bank.credit(t.reward); Bank.logTx && Bank.logTx(t.reward, 'Prime palier du duo');
-      UI.toast(`🏆 Palier du duo ${fmtMoney(t.at)} atteint ! +${fmtMoney(t.reward)} et +${Math.round(t.bonus * 100)}% de ventes pour vous deux !`, 'win');
+      Bank.credit(t.reward); Bank.logTx && Bank.logTx(t.reward, 'Prime palier du groupe');
+      UI.toast(`🏆 Palier du groupe ${fmtMoney(tierAt(reached))} atteint ! +${fmtMoney(t.reward)} et +${Math.round(t.bonus * 100)}% de ventes pour tout le groupe !`, 'win');
       Sound.play('jackpot'); UI.coinRain(24);
       reached++;
     }
@@ -3168,7 +3179,7 @@ const Multiplayer = (() => {
   const CONTRACTS = [
     { type: 'sell',    verb: (t) => `Vendre ${t} véhicules à l'export`, targets: [3, 5, 8, 12] },
     { type: 'revenue', verb: (t) => `Réaliser ${fmtMoney(t)} de ventes`, targets: [120000, 300000, 700000] },
-    { type: 'deposit', verb: (t) => `Déposer ${fmtMoney(t)} au coffre du duo`, targets: [60000, 150000, 400000] },
+    { type: 'deposit', verb: (t) => `Déposer ${fmtMoney(t)} au coffre du groupe`, targets: [60000, 150000, 400000] },
   ];
   let contractIdx = 0, contractProg = 0;
   const cIdxKey = () => 'rnc_ctrIdx_' + (savedDuoCode() || 'x');
@@ -3177,8 +3188,10 @@ const Multiplayer = (() => {
   const saveContract = () => { localStorage.setItem(cIdxKey(), String(contractIdx)); localStorage.setItem(cProgKey(), String(contractProg)); };
   const currentContract = () => {
     const c = CONTRACTS[mpHash('ctr#' + (savedDuoCode() || 'x') + '#' + contractIdx) % CONTRACTS.length];
-    const target = c.targets[mpHash('tgt#' + contractIdx) % c.targets.length];
-    const reward = 40000 + contractIdx * 20000;   // récompense croissante
+    // Objectif mis à l'échelle du groupe (plus de joueurs → plus dur à finir).
+    const base = c.targets[mpHash('tgt#' + contractIdx) % c.targets.length];
+    const target = Math.round(base * diffScale());
+    const reward = Math.round((40000 + contractIdx * 20000) * diffScale());   // récompense aussi ↑
     return { type: c.type, target, reward, text: c.verb(target) };
   };
   const contractProgress = (type, amount) => {
@@ -3262,7 +3275,7 @@ const Multiplayer = (() => {
     $('#mpOnlineNote').textContent = navigator.onLine ? '' : 'Hors ligne.';
     // Bouton « Reprendre » si une partie à 2 a déjà été créée (code mémorisé).
     const rb = $('#mpResume'); const sc = savedDuoCode();
-    if (rb) { rb.hidden = !sc; rb.innerHTML = sc ? `🔁 Reprendre la partie à 2 <b>${sc}</b>` : ''; }
+    if (rb) { rb.hidden = !sc; rb.innerHTML = sc ? `🔁 Reprendre le groupe <b>${sc}</b>` : ''; }
     updateServerInfo();
     screen('menu');
     modal.classList.remove('hidden');
@@ -3317,60 +3330,79 @@ const Multiplayer = (() => {
     send({ type: 'resume', code: c, name: myName });
   };
 
+  let iAmReady = false;
   const ready = () => {
     if (!ws || ws.readyState !== 1) {   // connexion tombée : on ne bloque pas silencieusement
       UI.toast('📴 Connexion au serveur perdue. Revenez au menu et refaites « Héberger/Rejoindre ».', 'lose');
       screen('menu'); return;
     }
+    iAmReady = true;
     send({ type: 'ready', ready: true });
-    $('#mpReady').disabled = true; $('#mpP1State').textContent = 'Prêt ✔';
+    $('#mpReady').disabled = true; $('#mpReady').textContent = 'Prêt ✔ — en attente du groupe…';
   };
 
   const send = (obj) => { try { ws.send(JSON.stringify(obj)); } catch (e) {} };
 
-  const showLobby = (names) => {
+  const nameOf = (i) => { const mm = membersList.find((x) => x.idx === i); return mm ? mm.name : ('Joueur ' + (i + 1)); };
+
+  // Affiche le salon avec la liste dynamique des membres du groupe.
+  const showLobby = (members) => {
+    if (members) membersList = members;
     code && ($('#mpCode').textContent = code);
     $('#mpCodeBar').hidden = !code;
-    $('#mpP1Name').textContent = names[idx] || myName;
-    const pn = names[idx === 0 ? 1 : 0];
-    $('#mpP2Name').textContent = pn || 'En attente…';
-    $('#mpP2').classList.toggle('waiting', !pn);
-    $('#mpReady').disabled = !pn;             // prêt possible seulement quand le duo est là
-    $('#mpLobbyHint').textContent = pn ? 'Cliquez « Je suis prêt » quand vous l\'êtes.' : 'Partagez le code pour que votre ami vous rejoigne.';
+    const n = membersList.length;
+    $('#mpGroupCount').textContent = n + '/' + MAXP;
+    const cont = $('#mpMembers');
+    if (cont) {
+      cont.innerHTML = membersList.map((mm) => {
+        const you = mm.idx === idx;
+        return `<div class="mp-member${mm.ready ? ' ready' : ''}">
+          <span class="mp-m-name">${mm.idx === idx ? '👑 ' : ''}${(mm.name || 'Joueur').replace(/</g, '&lt;')}${you ? ' (vous)' : ''}</span>
+          <span class="mp-m-state">${mm.ready ? 'Prêt ✔' : '…'}</span>
+        </div>`;
+      }).join('') + (n < MAXP ? `<div class="mp-member waiting"><span class="mp-m-name">En attente…</span><span class="mp-m-state">${MAXP - n} place(s)</span></div>` : '');
+    }
+    const canStart = n >= MINP;
+    $('#mpReady').disabled = !canStart || iAmReady;
+    if (!iAmReady) $('#mpReady').textContent = 'Je suis prêt';
+    $('#mpLobbyHint').textContent = canStart
+      ? 'Cliquez « Je suis prêt ». La partie démarre quand TOUT le groupe est prêt.'
+      : `Partagez le code — il faut au moins ${MINP} joueurs (${n}/${MAXP}).`;
     updateServerInfo();
     screen('lobby');
   };
 
   const handle = (m) => {
-    if (m.type === 'hosted') { idx = m.idx; setDuoCode(m.code); peerName = ''; showLobby(m.names); }
-    else if (m.type === 'joined') { idx = m.idx; setDuoCode(m.code); peerName = m.names[0]; showLobby(m.names); }
-    else if (m.type === 'peerJoined') { peerName = m.names[1]; showLobby(m.names); UI.toast(`${peerName} a rejoint la partie !`, 'win'); Sound.play('win'); }
-    else if (m.type === 'peerReady') { $('#mpP2State').textContent = m.ready ? 'Prêt ✔' : 'Pas prêt'; }
-    else if (m.type === 'start') { startGame(m.names); }
-    // Reconnexion à une partie existante (sans onboarding, on garde la sauvegarde).
-    else if (m.type === 'resumed') { idx = m.idx; setDuoCode(m.code); peerName = m.names[idx === 0 ? 1 : 0] || ''; resumeGame(m.names); }
-    else if (m.type === 'peerResumed') { peerName = (m.names[idx === 0 ? 1 : 0]) || peerName; UI.toast(`🔁 ${peerName || 'Votre partenaire'} est de retour !`, 'win'); Sound.play('win'); syncOut(true); renderDuoHud(); }
-    else if (m.type === 'peerCountry') { partnerCountry = m.country; }
+    if (m.type === 'hosted') { idx = m.idx; setDuoCode(m.code); showLobby(m.members); }
+    else if (m.type === 'joined') { idx = m.idx; setDuoCode(m.code); showLobby(m.members); }
+    else if (m.type === 'peerJoined') { const before = membersList.length; showLobby(m.members); if (membersList.length > before) { UI.toast('👋 Un joueur a rejoint le groupe !', 'win'); Sound.play('win'); } }
+    else if (m.type === 'lobby') { showLobby(m.members); }
+    else if (m.type === 'start') { startGame(m.members); }
+    // Reconnexion (sans onboarding, on garde la sauvegarde).
+    else if (m.type === 'resumed') { idx = m.idx; setDuoCode(m.code); resumeGame(m.members); }
+    else if (m.type === 'peerResumed') { membersList = m.members || membersList; UI.toast('🔁 Un membre est de retour !', 'win'); Sound.play('win'); syncOut(true); renderDuoHud(); }
+    else if (m.type === 'peerCountry') { if (peers[m.idx]) peers[m.idx].country = m.country; else peers[m.idx] = { country: m.country }; }
     else if (m.type === 'relay') {
+      const from = m.from;
       if (m.kind === 'sync') {
-        partnerState = m.data || null;
-        if (m.data && m.data.country) partnerCountry = m.data.country;
+        if (from != null) peers[from] = m.data || {};
         checkTiers();                    // le coffre a pu franchir un palier
         renderDuoHud(); renderDuoPanel();
       }
-      else if (m.kind === 'hello') { syncOut(true); }   // le partenaire demande notre état
-      else if (m.kind === 'emote') { showEmote(m.e); UI.toast(`${peerName || 'Partenaire'} : ${m.e}`); Sound.play('select'); }
-      else if (m.kind === 'gift') {                       // cadeau reçu (argent ou véhicule)
-        if (m.money) { Bank.credit(m.money); Bank.logTx && Bank.logTx(m.money, 'Cadeau du partenaire'); UI.toast(`🎁 ${peerName || 'Votre partenaire'} vous a envoyé ${fmtMoney(m.money)} !`, 'win'); Sound.play('win'); UI.coinRain(10); }
-        if (m.vehicle) { const v = m.vehicle, k = v.cat + '|' + v.name, inv = Bank.inventory; if (inv[k]) inv[k].qty += (v.qty || 1); else inv[k] = { cat: v.cat, name: v.name, price: v.price, qty: (v.qty || 1) }; Bank.persist(); UI.toast(`🚚 ${peerName || 'Votre partenaire'} vous a expédié ${v.qty || 1}× ${v.name} ! Revendez-le où la demande est forte.`, 'win'); Sound.play('win'); UI.coinRain(6); }
+      else if (m.kind === 'hello') { syncOut(true); }   // un membre demande les états
+      else if (m.kind === 'emote') { showEmote(m.e); UI.toast(`${(peers[from] && peers[from].name) || nameOf(from) || 'Un membre'} : ${m.e}`); Sound.play('select'); }
+      else if (m.kind === 'gift') {                       // cadeau reçu (si ça m'est adressé)
+        if (m.to != null && m.to !== idx) return;         // destiné à un autre membre
+        const who = (peers[from] && peers[from].name) || nameOf(from) || 'Un membre';
+        if (m.money) { Bank.credit(m.money); Bank.logTx && Bank.logTx(m.money, 'Cadeau reçu'); UI.toast(`🎁 ${who} vous a envoyé ${fmtMoney(m.money)} !`, 'win'); Sound.play('win'); UI.coinRain(10); }
+        if (m.vehicle) { const v = m.vehicle, k = v.cat + '|' + v.name, inv = Bank.inventory; if (inv[k]) inv[k].qty += (v.qty || 1); else inv[k] = { cat: v.cat, name: v.name, price: v.price, qty: (v.qty || 1) }; Bank.persist(); UI.toast(`🚚 ${who} vous a expédié ${v.qty || 1}× ${v.name} !`, 'win'); Sound.play('win'); UI.coinRain(6); }
         renderDuoPanel();
       }
     }
     else if (m.type === 'countryOk') { if (countryResolve) { countryResolve(true); countryResolve = null; } }
     else if (m.type === 'countryRejected') { if (countryResolve) { countryResolve(false); countryResolve = null; } }
-    // Le partenaire s'est déconnecté : on NE ferme PAS la partie — il peut revenir
-    // avec le même code. On continue à jouer, la sauvegarde est intacte.
-    else if (m.type === 'peerLeft') { partnerState = null; renderDuoHud(); UI.toast(`⚠️ Partenaire déconnecté. Il peut revenir avec le code ${code}.`, 'lose'); }
+    // Un membre s'est déconnecté : on NE ferme PAS — il peut revenir avec le code.
+    else if (m.type === 'peerLeft') { if (m.idx != null) delete peers[m.idx]; if (m.members) membersList = m.members; renderDuoHud(); renderDuoPanel(); UI.toast(`⚠️ Un membre s'est déconnecté. Il peut revenir avec le code ${code}.`, 'lose'); }
     else if (m.type === 'error') { UI.toast(m.error || 'Erreur.', 'lose'); }
   };
 
@@ -3399,23 +3431,23 @@ const Multiplayer = (() => {
     syncTimer = setInterval(() => { syncOut(); renderDuoHud(); }, 4000);
   };
 
-  // 1re fois : création de la partie à 2 (chaque joueur crée son entreprise).
-  const startGame = (names) => {
-    peerName = names[idx === 0 ? 1 : 0];
+  // 1re fois : lancement du groupe (chaque joueur crée son entreprise).
+  const startGame = (members) => {
+    if (members) membersList = members;
     beginCoop();
     Nav.go('home');
-    UI.toast(`🎮 Partie à 2 lancée avec ${peerName} ! Créez votre entreprise (pays unique).`, 'win');
+    UI.toast(`🎮 Partie de groupe lancée à ${groupSize()} joueurs ! Créez votre entreprise (pays unique).`, 'win');
     Sound.play('jackpot'); UI.coinRain(20);
     Onboarding.start('company');   // pays vérifié côté serveur
   };
 
   // Reprise : on garde la sauvegarde en cours, pas d'onboarding, on re-réserve son pays.
-  const resumeGame = (names) => {
-    peerName = names[idx === 0 ? 1 : 0] || '';
+  const resumeGame = (members) => {
+    if (members) membersList = members;
     beginCoop();
     const myCountry = (Bank.company && Bank.company.country) || '';
     if (myCountry && ws && ws.readyState === 1) send({ type: 'country', country: myCountry });
-    UI.toast(`🔁 Reconnecté à la partie à 2${peerName ? ' avec ' + peerName : ''} ! Votre progression est intacte.`, 'win');
+    UI.toast(`🔁 Reconnecté au groupe (${groupSize()} joueurs) ! Votre progression est intacte.`, 'win');
     Sound.play('win'); UI.coinRain(10);
   };
 
@@ -3425,7 +3457,7 @@ const Multiplayer = (() => {
     country: (Bank.company && Bank.company.country) || '',
     balance: Math.round(Bank.balance || 0),
     level: Bank.level || 1,
-    deposited: myDeposited(),           // ma contribution au coffre du duo
+    deposited: myDeposited(),           // ma contribution au coffre du groupe
   });
   const syncOut = (force) => {
     if (!active || !ws || ws.readyState !== 1) return;
@@ -3442,38 +3474,52 @@ const Multiplayer = (() => {
     const link = $('#duoLink');
     const online = ws && ws.readyState === 1;
     if (link) { link.textContent = online ? '● en ligne' : '● hors ligne'; link.classList.toggle('off', !online); }
-    const ps = partnerState;
-    $('#duoPName').textContent = (ps && ps.name) || peerName || 'Partenaire';
-    $('#duoPStat').textContent = ps ? ('Niv. ' + ps.level + ' · ' + fmtMoney(ps.balance)) : 'en attente…';
+    const others = Object.values(peers);
+    const groupBal = Math.round(Bank.balance || 0) + others.reduce((a, p) => a + ((p && p.balance) || 0), 0);
+    $('#duoPName').textContent = `👥 Groupe · ${groupSize()} joueur${groupSize() > 1 ? 's' : ''}`;
+    $('#duoPStat').textContent = fmtMoney(groupBal) + ' cumulés';
     const total = vaultTotal();
     const rk = $('#duoRank'); if (rk) rk.textContent = rankFor(total);
-    const next = TIERS.find((t) => total < t.at);
-    const prevAt = tierReached > 0 ? TIERS[tierReached - 1].at : 0;
-    const targetAt = next ? next.at : TIERS[TIERS.length - 1].at;
-    const pct = next ? clamp(Math.round((total - prevAt) / (targetAt - prevAt) * 100), 0, 100) : 100;
+    const nextIdx = TIERS.findIndex((t, i) => total < tierAt(i));
+    const targetAt = nextIdx >= 0 ? tierAt(nextIdx) : tierAt(TIERS.length - 1);
+    const prevAt = tierReached > 0 ? tierAt(tierReached - 1) : 0;
+    const pct = nextIdx >= 0 ? clamp(Math.round((total - prevAt) / (targetAt - prevAt) * 100), 0, 100) : 100;
     $('#duoGoalPct').textContent = pct + ' %';
     $('#duoBarFill').style.width = pct + '%';
     $('#duoGoalSub').textContent = fmtMoney(total) + ' / ' + fmtMoney(targetAt);
   };
 
-  // ── Panneau Duo : coffre, rang, paliers, cadeaux/sauvetage ────────────────
+  // ── Panneau du groupe : coffre, rang, paliers, membres, cadeaux ───────────
   const renderDuoPanel = () => {
     const p = $('#duoPanel'); if (!p || p.classList.contains('hidden')) return;
     const total = vaultTotal();
-    $('#duoRankBig').textContent = rankFor(total);
+    $('#duoRankBig').textContent = `${rankFor(total)} · ${groupSize()} joueur${groupSize() > 1 ? 's' : ''}`;
     $('#duoVaultTotal').textContent = fmtMoney(total);
-    const next = TIERS.find((t) => total < t.at);
-    const prevAt = tierReached > 0 ? TIERS[tierReached - 1].at : 0;
-    const targetAt = next ? next.at : TIERS[TIERS.length - 1].at;
-    const pct = next ? clamp(Math.round((total - prevAt) / (targetAt - prevAt) * 100), 0, 100) : 100;
+    const nextIdx = TIERS.findIndex((t, i) => total < tierAt(i));
+    const targetAt = nextIdx >= 0 ? tierAt(nextIdx) : tierAt(TIERS.length - 1);
+    const prevAt = tierReached > 0 ? tierAt(tierReached - 1) : 0;
+    const pct = nextIdx >= 0 ? clamp(Math.round((total - prevAt) / (targetAt - prevAt) * 100), 0, 100) : 100;
     $('#duoPanelBar').style.width = pct + '%';
-    $('#duoVaultNext').textContent = next
-      ? `Prochain palier : ${fmtMoney(next.at)}  (+${Math.round(next.bonus * 100)}% ventes · prime ${fmtMoney(next.reward)} chacun)`
-      : '👑 Tous les paliers atteints — Empereurs du commerce !';
-    $('#duoPerks').innerHTML = TIERS.map((t) => {
-      const done = total >= t.at;
-      return `<div class="duo-perk${done ? ' done' : ''}"><span class="duo-perk-ico">${done ? '✅' : '🔒'}</span> ${fmtMoney(t.at)} → +${Math.round(t.bonus * 100)}% ventes · prime ${fmtMoney(t.reward)}</div>`;
+    $('#duoVaultNext').textContent = nextIdx >= 0
+      ? `Prochain palier : ${fmtMoney(tierAt(nextIdx))}  (+${Math.round(TIERS[nextIdx].bonus * 100)}% ventes · prime ${fmtMoney(TIERS[nextIdx].reward)} chacun)`
+      : '👑 Tous les paliers atteints !';
+    $('#duoPerks').innerHTML = TIERS.map((t, i) => {
+      const done = total >= tierAt(i);
+      return `<div class="duo-perk${done ? ' done' : ''}"><span class="duo-perk-ico">${done ? '✅' : '🔒'}</span> ${fmtMoney(tierAt(i))} → +${Math.round(t.bonus * 100)}% ventes · prime ${fmtMoney(t.reward)}</div>`;
     }).join('');
+    // Liste des membres (soi + partenaires connus par la synchro).
+    const membersEl = $('#duoMembers');
+    if (membersEl) {
+      const rows = [{ name: (Bank.company && Bank.company.name) || myName, country: (Bank.company && Bank.company.country) || '', balance: Math.round(Bank.balance || 0), you: true }]
+        .concat(Object.entries(peers).map(([i, ps]) => ({ name: (ps && ps.name) || nameOf(+i), country: (ps && ps.country) || '', balance: (ps && ps.balance) || 0, you: false })));
+      membersEl.innerHTML = rows.map((r) => `<div class="duo-member"><span>${r.you ? '👑 ' : '👤 '}${(r.name || 'Joueur').replace(/</g, '&lt;')}${r.country ? ' · ' + r.country : ''}</span><span>${fmtMoney(r.balance)}</span></div>`).join('');
+    }
+    // Cible d'envoi : un membre du groupe.
+    const tgt = $('#duoGiftTarget');
+    if (tgt) {
+      const opts = Object.entries(peers).map(([i, ps]) => `<option value="${i}">${((ps && ps.name) || nameOf(+i)).replace(/</g, '&lt;')}</option>`).join('');
+      tgt.innerHTML = opts || '<option value="">Aucun autre membre connecté</option>';
+    }
     const sel = $('#duoGiftVehicle');
     if (sel) {
       const owned = Object.values(Bank.inventory || {}).filter((v) => v && v.qty > 0);
@@ -3508,31 +3554,34 @@ const Multiplayer = (() => {
     amount = Math.floor(Number(amount) || 0);
     if (amount <= 0) { UI.toast('Montant invalide.', 'lose'); return; }
     if (Bank.balance < amount) { UI.toast('Solde insuffisant.', 'lose'); return; }
-    Bank.debit(amount); Bank.logTx && Bank.logTx(-amount, 'Dépôt coffre du duo');
+    Bank.debit(amount); Bank.logTx && Bank.logTx(-amount, 'Dépôt coffre du groupe');
     setMyDeposited(myDeposited() + amount);
     syncOut(true);
-    UI.toast(`🏦 ${fmtMoney(amount)} déposés dans le coffre du duo !`, 'win'); Sound.play('chip'); UI.coinRain(8);
+    UI.toast(`🏦 ${fmtMoney(amount)} déposés dans le coffre du groupe !`, 'win'); Sound.play('chip'); UI.coinRain(8);
     contractProgress('deposit', amount);
     checkTiers(); renderDuoHud(); renderDuoPanel();
   };
+  const giftTarget = () => { const t = $('#duoGiftTarget'); return (t && t.value !== '') ? Number(t.value) : null; };
   const sendMoney = (amount) => {
     amount = Math.floor(Number(amount) || 0);
     if (amount <= 0) { UI.toast('Montant invalide.', 'lose'); return; }
     if (Bank.balance < amount) { UI.toast('Solde insuffisant.', 'lose'); return; }
-    if (!ws || ws.readyState !== 1) { UI.toast('Partenaire hors ligne — envoi impossible.', 'lose'); return; }
-    Bank.debit(amount); Bank.logTx && Bank.logTx(-amount, 'Cadeau au partenaire');
-    send({ type: 'relay', kind: 'gift', money: amount });
-    UI.toast(`💸 ${fmtMoney(amount)} envoyés à votre partenaire !`, 'win'); Sound.play('chip');
+    if (!ws || ws.readyState !== 1) { UI.toast('Hors ligne — envoi impossible.', 'lose'); return; }
+    const to = giftTarget(); if (to == null) { UI.toast('Aucun membre à qui envoyer.', 'lose'); return; }
+    Bank.debit(amount); Bank.logTx && Bank.logTx(-amount, 'Cadeau à un membre');
+    send({ type: 'relay', kind: 'gift', money: amount, to });
+    UI.toast(`💸 ${fmtMoney(amount)} envoyés à ${(peers[to] && peers[to].name) || nameOf(to)} !`, 'win'); Sound.play('chip');
     renderDuoPanel();
   };
   const sendVehicle = (key) => {
     const inv = Bank.inventory, item = inv[key];
     if (!item || item.qty < 1) { UI.toast('Aucun véhicule à envoyer.', 'lose'); return; }
-    if (!ws || ws.readyState !== 1) { UI.toast('Partenaire hors ligne — envoi impossible.', 'lose'); return; }
+    if (!ws || ws.readyState !== 1) { UI.toast('Hors ligne — envoi impossible.', 'lose'); return; }
+    const to = giftTarget(); if (to == null) { UI.toast('Aucun membre à qui envoyer.', 'lose'); return; }
     item.qty -= 1; if (item.qty <= 0) delete inv[key];
     Bank.persist();
-    send({ type: 'relay', kind: 'gift', vehicle: { cat: item.cat, name: item.name, price: item.price, qty: 1 } });
-    UI.toast(`🚚 ${item.name} expédié à votre partenaire !`, 'win'); Sound.play('chip');
+    send({ type: 'relay', kind: 'gift', vehicle: { cat: item.cat, name: item.name, price: item.price, qty: 1 }, to });
+    UI.toast(`🚚 ${item.name} expédié à ${(peers[to] && peers[to].name) || nameOf(to)} !`, 'win'); Sound.play('chip');
     renderDuoPanel();
   };
 
@@ -3554,12 +3603,12 @@ const Multiplayer = (() => {
     } catch (e) {}
   };
 
-  const teardown = () => { active = false; partnerCountry = null; partnerState = null; code = ''; clearInterval(syncTimer); syncTimer = null; const hud = $('#duoHud'); if (hud) hud.classList.add('hidden'); const dp = $('#duoPanel'); if (dp) dp.classList.add('hidden'); try { ws && ws.close(); } catch (e) {} ws = null; modal.classList.add('hidden'); };
+  const teardown = () => { active = false; peers = {}; membersList = []; iAmReady = false; code = ''; clearInterval(syncTimer); syncTimer = null; const hud = $('#duoHud'); if (hud) hud.classList.add('hidden'); const dp = $('#duoPanel'); if (dp) dp.classList.add('hidden'); try { ws && ws.close(); } catch (e) {} ws = null; modal.classList.add('hidden'); };
   // ✕ : si une partie est en cours, on ferme juste le menu (la partie continue).
   // Sinon (menu/salon), on referme la connexion.
   const close = () => { Sound.play('click'); if (active) { modal.classList.add('hidden'); } else { teardown(); } };
 
-  return { init, openMenu, claimCountry, saleBonus, contractProgress, get active() { return active; }, get partnerCountry() { return partnerCountry; }, get peerName() { return peerName; } };
+  return { init, openMenu, claimCountry, saleBonus, contractProgress, isMemberCountry, get active() { return active; }, get groupSize() { return groupSize(); }, get memberCountries() { return memberCountries(); } };
 })();
 
 /* ======================================================================

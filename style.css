@@ -687,6 +687,20 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .duo-perk.done{border-color:rgba(63,174,107,.5);color:#7fe0a0;background:rgba(63,174,107,.08)}
 .duo-perk .duo-perk-ico{font-size:1rem}
 .duo-contract-text{color:var(--gold-2);font-size:.95rem;font-family:var(--font-display);letter-spacing:.02em}
+/* Liste des membres (salon + panneau) */
+.mp-members{display:flex;flex-direction:column;gap:.4rem;margin-bottom:1rem;max-height:40vh;overflow-y:auto}
+.mp-member{display:flex;justify-content:space-between;align-items:center;gap:.6rem;background:var(--glass);
+  border:1px solid var(--line);border-radius:12px;padding:.6rem .8rem}
+.mp-member.ready{border-color:rgba(63,174,107,.5);background:rgba(63,174,107,.08)}
+.mp-member.waiting{opacity:.5;border-style:dashed}
+.mp-m-name{font-family:var(--font-display);color:var(--gold-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-m-state{color:var(--txt-dim);font-size:.82rem;white-space:nowrap}
+#mpGroupCount{color:var(--gold);font-variant-numeric:tabular-nums}
+.duo-members{display:flex;flex-direction:column;gap:.3rem;max-height:180px;overflow-y:auto}
+.duo-member{display:flex;justify-content:space-between;gap:.6rem;font-size:.85rem;color:var(--txt);
+  background:#0d0d10;border:1px solid var(--line);border-radius:9px;padding:.4rem .6rem;font-variant-numeric:tabular-nums}
+.duo-member span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--gold-2)}
+.duo-gift-lab{align-self:center;color:var(--txt-dim);font-size:.85rem;flex:0 0 auto}
 
 /* Badge de version (repère de cache) */
 .ver-badge{position:fixed;right:10px;bottom:10px;z-index:250;font-family:var(--font-display);font-weight:700;font-size:.9rem;

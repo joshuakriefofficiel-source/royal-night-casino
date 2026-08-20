@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=78">
+<link rel="stylesheet" href="style.css?v=79">
 </head>
 <body>
 
@@ -643,7 +643,7 @@
 
     <div class="set-section">
       <span class="set-label">Multijoueur</span>
-      <button class="btn-primary set-full" id="setMulti">🌐 Sauvegarde à 2 (en ligne)</button>
+      <button class="btn-primary set-full" id="setMulti">🌐 Groupe en ligne (2 à 10)</button>
       <p class="set-note" id="setMultiNote">Nécessite une connexion internet active.</p>
     </div>
   </div>
@@ -656,7 +656,7 @@
     <h1 class="slot-title">ROYAL&nbsp;NIGHT&nbsp;CASINO</h1>
     <p class="slot-sub">Choisissez un emplacement de sauvegarde</p>
     <div class="slot-grid" id="slotGrid"></div>
-    <button class="btn-primary slot-multi" id="slotMulti">🌐 Jouer à 2 — en ligne</button>
+    <button class="btn-primary slot-multi" id="slotMulti">🌐 Jouer en groupe — en ligne</button>
     <p class="slot-multi-note" id="slotMultiNote"></p>
   </div>
 </div>
@@ -669,8 +669,8 @@
       <button id="mpShare2" class="mp-mini" title="Partager l'invitation">📤 Inviter</button></div>
 
     <div class="mp-screen" data-mp="menu">
-      <h2 class="mp-title">🌐 Jouer à 2 — en ligne</h2>
-      <p class="mp-sub">Associez-vous à un ami : pays uniques, et commerce entre vous <b>réduit</b> (prix et délais).</p>
+      <h2 class="mp-title">🌐 Jouer en groupe — en ligne</h2>
+      <p class="mp-sub">Formez un groupe de <b>2 à 10 joueurs</b> : pays uniques, commerce réduit entre membres, et objectifs communs de plus en plus corsés à mesure que le groupe grandit.</p>
       <button class="btn-primary big" id="mpResume" hidden></button>
       <button class="btn-primary big" id="mpHost">Héberger une partie</button>
       <button class="btn-ghost big" id="mpJoinBtn">Rejoindre via un code</button>
@@ -695,13 +695,9 @@
     </div>
 
     <div class="mp-screen" data-mp="lobby" hidden>
-      <h2 class="mp-title">Salon</h2>
-      <div class="mp-players">
-        <div class="mp-player" id="mpP1"><span class="mp-p-name" id="mpP1Name">Vous</span><span class="mp-p-state" id="mpP1State">Pas prêt</span></div>
-        <div class="mp-vs">🤝</div>
-        <div class="mp-player waiting" id="mpP2"><span class="mp-p-name" id="mpP2Name">En attente…</span><span class="mp-p-state" id="mpP2State"></span></div>
-      </div>
-      <p class="mp-sub" id="mpLobbyHint">Partagez le code pour que votre ami vous rejoigne.</p>
+      <h2 class="mp-title">Salon du groupe <span id="mpGroupCount">1/10</span></h2>
+      <div class="mp-members" id="mpMembers"></div>
+      <p class="mp-sub" id="mpLobbyHint">Partagez le code — il faut au moins 2 joueurs (max 10).</p>
       <p class="mp-note" id="mpConnInfo"></p>
       <button class="btn-primary big" id="mpReady" disabled>Je suis prêt</button>
     </div>
@@ -745,10 +741,10 @@
 
 <!-- ══════════════════ HUD DUO (co-op temps réel) ══════════════════ -->
 <div id="duoHud" class="duo-hud hidden" aria-live="polite">
-  <div class="duo-head">🤝 <b>Duo</b> <span class="duo-rank" id="duoRank">Novices</span> <span id="duoLink" class="duo-link">● en ligne</span></div>
-  <div class="duo-row"><span class="duo-lab" id="duoPName">Partenaire</span><span class="duo-val" id="duoPStat">—</span></div>
+  <div class="duo-head">👥 <b>Groupe</b> <span class="duo-rank" id="duoRank">Novices</span> <span id="duoLink" class="duo-link">● en ligne</span></div>
+  <div class="duo-row"><span class="duo-lab" id="duoPName">Groupe</span><span class="duo-val" id="duoPStat">—</span></div>
   <div class="duo-goal">
-    <div class="duo-goal-top"><span>🏦 Coffre du duo</span><span id="duoGoalPct">0 %</span></div>
+    <div class="duo-goal-top"><span>🏦 Coffre du groupe</span><span id="duoGoalPct">0 %</span></div>
     <div class="duo-bar"><div class="duo-bar-fill" id="duoBarFill"></div></div>
     <div class="duo-goal-sub" id="duoGoalSub">0 € / 100 000 €</div>
   </div>
@@ -770,12 +766,18 @@
 <div id="duoPanel" class="duo-panel hidden">
   <div class="duo-panel-box">
     <button class="duo-panel-close" id="duoPanelClose" aria-label="Fermer">✕</button>
-    <h2 class="duo-panel-title">🤝 Le Duo</h2>
+    <h2 class="duo-panel-title">👥 Le Groupe</h2>
     <div class="duo-rank-big" id="duoRankBig">Novices</div>
+
+    <!-- Membres du groupe -->
+    <section class="duo-sec">
+      <h3 class="duo-sec-h">👥 Membres</h3>
+      <div class="duo-members" id="duoMembers"></div>
+    </section>
 
     <!-- Coffre commun -->
     <section class="duo-sec">
-      <h3 class="duo-sec-h">🏦 Coffre du duo</h3>
+      <h3 class="duo-sec-h">🏦 Coffre du groupe</h3>
       <div class="duo-vault-total" id="duoVaultTotal">0 €</div>
       <div class="duo-bar big"><div class="duo-bar-fill" id="duoPanelBar"></div></div>
       <p class="duo-sec-sub" id="duoVaultNext">Prochain palier : 100 000 €</p>
@@ -783,7 +785,7 @@
         <input id="duoDepositInput" class="duo-input" type="number" min="1" inputmode="numeric" placeholder="Montant à déposer…">
         <button class="btn-primary" id="duoDepositBtn">Déposer</button>
       </div>
-      <p class="duo-sec-note">Vous déposez tous les deux dans la même caisse. Chaque palier débloque un bonus de vente pour les 2 + une prime !</p>
+      <p class="duo-sec-note">Tout le groupe dépose dans la même caisse. Chaque palier débloque un bonus de vente pour tous + une prime ! Plus vous êtes nombreux, plus les paliers sont hauts.</p>
       <div class="duo-perks" id="duoPerks"></div>
     </section>
 
@@ -798,7 +800,11 @@
 
     <!-- Cadeaux / entraide -->
     <section class="duo-sec">
-      <h3 class="duo-sec-h">🎁 Envoyer à mon partenaire</h3>
+      <h3 class="duo-sec-h">🎁 Envoyer à un membre</h3>
+      <div class="duo-deposit">
+        <label class="duo-gift-lab">À&nbsp;:</label>
+        <select id="duoGiftTarget" class="duo-input"></select>
+      </div>
       <div class="duo-deposit">
         <input id="duoGiftMoney" class="duo-input" type="number" min="1" inputmode="numeric" placeholder="Montant en €…">
         <button class="btn-ghost" id="duoGiftMoneyBtn">💸 Envoyer</button>
@@ -807,7 +813,7 @@
         <select id="duoGiftVehicle" class="duo-input"></select>
         <button class="btn-ghost" id="duoGiftVehicleBtn">🚚 Expédier</button>
       </div>
-      <p class="duo-sec-note">Dépanne ton pote ou alimente son stock : il revend là où la demande est forte chez lui. Bien plus rentable à deux !</p>
+      <p class="duo-sec-note">Dépanne un joueur ou alimente son stock : il revend là où la demande est forte chez lui.</p>
     </section>
   </div>
 </div>
@@ -829,7 +835,7 @@
   </div>
 </div>
 
-<script src="world.js?v=78"></script>
-<script src="app.js?v=78"></script>
+<script src="world.js?v=79"></script>
+<script src="app.js?v=79"></script>
 </body>
 </html>

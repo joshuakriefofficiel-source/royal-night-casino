@@ -53,13 +53,21 @@ const server = http.createServer((req, res) => {
 
 /* ── Serveur WebSocket : partage le même port HTTP ────────────────────── */
 const wss = new WebSocketServer({ server });
-const rooms = new Map(); // code -> { code, players:[ws], names:[], ready:[], countries:[] }
+const rooms = new Map(); // code -> { code, players:[ws], names[], ready[], countries[], started }
+const MAX = 10, MIN = 2;
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function code6() { let s = ''; for (let i = 0; i < 6; i++) s += ALPHABET[Math.floor(Math.random() * ALPHABET.length)]; return s; }
 function send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) {} }
 function roomOf(ws) { return ws._room && rooms.get(ws._room); }
-function peer(room, ws) { return room.players.find((p) => p !== ws); }
+function broadcast(room, obj, except) { room.players.forEach((p) => { if (p !== except) send(p, obj); }); }
+function freeSlot(room) { const used = new Set(room.players.map((p) => p._idx)); for (let i = 0; i < MAX; i++) if (!used.has(i)) return i; return -1; }
+// Liste des membres CONNECTÉS (idx, nom, prêt) — envoyée à tout le groupe.
+function members(room) {
+  return room.players.map((p) => ({ idx: p._idx, name: room.names[p._idx] || ('Joueur ' + (p._idx + 1)), ready: !!room.ready[p._idx], country: room.countries[p._idx] || null }))
+    .sort((a, b) => a.idx - b.idx);
+}
+function newRoom(code) { return { code, players: [], names: [], ready: [], countries: [], started: false }; }
 
 wss.on('connection', (ws) => {
   ws.on('message', (raw) => {
@@ -67,68 +75,69 @@ wss.on('connection', (ws) => {
 
     if (m.type === 'host') {
       let code; do { code = code6(); } while (rooms.has(code));
-      const room = { code, players: [ws], names: [m.name || 'Joueur 1', ''], ready: [false, false], countries: [null, null] };
-      rooms.set(code, room); ws._room = code; ws._idx = 0;
-      send(ws, { type: 'hosted', code, idx: 0, names: room.names });
+      const room = newRoom(code);
+      room.players.push(ws); room.names[0] = m.name || 'Joueur 1'; ws._room = code; ws._idx = 0;
+      rooms.set(code, room);
+      send(ws, { type: 'hosted', code, idx: 0, members: members(room), max: MAX, min: MIN });
 
     } else if (m.type === 'join') {
       const room = rooms.get(String(m.code || '').toUpperCase());
-      if (!room) { send(ws, { type: 'error', error: 'Code invalide ou partie introuvable.' }); return; }
-      if (room.players.length >= 2) { send(ws, { type: 'error', error: 'Cette partie est déjà complète.' }); return; }
-      room.players.push(ws); room.names[1] = m.name || 'Joueur 2'; ws._room = room.code; ws._idx = 1;
-      send(ws, { type: 'joined', code: room.code, idx: 1, names: room.names });
-      const host = room.players[0]; if (host) send(host, { type: 'peerJoined', names: room.names });
+      if (!room) { send(ws, { type: 'error', error: 'Code invalide ou groupe introuvable.' }); return; }
+      if (room.players.length >= MAX) { send(ws, { type: 'error', error: `Groupe complet (${MAX} joueurs max).` }); return; }
+      const idx = freeSlot(room);
+      room.players.push(ws); room.names[idx] = m.name || ('Joueur ' + (idx + 1)); ws._room = room.code; ws._idx = idx;
+      send(ws, { type: 'joined', code: room.code, idx, members: members(room), max: MAX, min: MIN });
+      broadcast(room, { type: 'peerJoined', members: members(room) }, ws);
 
     } else if (m.type === 'ready') {
       const room = roomOf(ws); if (!room) return;
       room.ready[ws._idx] = !!m.ready;
-      const o = peer(room, ws); if (o) send(o, { type: 'peerReady', ready: room.ready[ws._idx] });
-      if (room.ready[0] && room.ready[1] && room.players.length === 2) {
-        room.players.forEach((p) => send(p, { type: 'start', names: room.names }));
+      broadcast(room, { type: 'lobby', members: members(room) }, null);   // état à tous
+      const allReady = room.players.length >= MIN && room.players.every((p) => room.ready[p._idx]);
+      if (allReady && !room.started) {
+        room.started = true;
+        broadcast(room, { type: 'start', members: members(room) }, null);
       }
 
     } else if (m.type === 'country') {
       const room = roomOf(ws); if (!room) return;
-      const otherIdx = ws._idx === 0 ? 1 : 0;
-      if (room.countries[otherIdx] && room.countries[otherIdx] === m.country) { send(ws, { type: 'countryRejected', country: m.country }); return; }
+      const taken = room.players.some((p) => p._idx !== ws._idx && room.countries[p._idx] === m.country);
+      if (taken) { send(ws, { type: 'countryRejected', country: m.country }); return; }
       room.countries[ws._idx] = m.country;
       send(ws, { type: 'countryOk', country: m.country });
-      const o = peer(room, ws); if (o) send(o, { type: 'peerCountry', country: m.country });
+      broadcast(room, { type: 'peerCountry', idx: ws._idx, country: m.country }, ws);
 
     } else if (m.type === 'resume') {
-      // Reconnexion à une partie à 2 via son code permanent.
       const code = String(m.code || '').toUpperCase();
       if (!code) { send(ws, { type: 'error', error: 'Code manquant.' }); return; }
       let room = rooms.get(code);
-      if (!room) {
-        // La partie n'existe plus (serveur redémarré / vidée) : on la RECRÉE.
-        room = { code, players: [ws], names: [m.name || 'Joueur 1', ''], ready: [true, true], countries: [null, null], persistent: true };
-        rooms.set(code, room); ws._room = code; ws._idx = 0;
-        send(ws, { type: 'resumed', code, idx: 0, names: room.names, partnerPresent: false });
-      } else if (room.players.length < 2) {
-        const usedIdx = room.players.map((p) => p._idx);
-        const idx = usedIdx.includes(0) ? 1 : 0;
-        room.players.push(ws); room.names[idx] = m.name || room.names[idx] || ('Joueur ' + (idx + 1));
+      if (!room) {                                   // groupe disparu → on le RECRÉE
+        room = newRoom(code); room.started = true;
+        room.players.push(ws); room.names[0] = m.name || 'Joueur 1'; room.ready[0] = true; ws._room = code; ws._idx = 0;
+        rooms.set(code, room);
+        send(ws, { type: 'resumed', code, idx: 0, members: members(room), max: MAX, min: MIN });
+      } else if (room.players.length < MAX) {
+        const idx = freeSlot(room);
+        room.players.push(ws); room.names[idx] = m.name || room.names[idx] || ('Joueur ' + (idx + 1)); room.ready[idx] = true;
         ws._room = code; ws._idx = idx;
-        send(ws, { type: 'resumed', code, idx, names: room.names, partnerPresent: true });
-        const o = peer(room, ws); if (o) send(o, { type: 'peerResumed', names: room.names });
+        send(ws, { type: 'resumed', code, idx, members: members(room), max: MAX, min: MIN });
+        broadcast(room, { type: 'peerResumed', members: members(room) }, ws);
       } else {
-        send(ws, { type: 'error', error: 'Cette partie est déjà complète.' });
+        send(ws, { type: 'error', error: `Groupe complet (${MAX} joueurs max).` });
       }
 
     } else if (m.type === 'relay') {
       const room = roomOf(ws); if (!room) return;
-      const o = peer(room, ws); if (o) send(o, m);
+      m.from = ws._idx;                              // qui a envoyé (pour cibler/afficher)
+      broadcast(room, m, ws);                        // diffusé à TOUT le groupe
     }
   });
 
   ws.on('close', () => {
     const room = roomOf(ws); if (!room) return;
-    // On retire le joueur mais on GARDE la partie ouverte : le code reste valable
-    // pour revenir (persistance). Nettoyage seulement si vide depuis 15 min.
     room.players = room.players.filter((p) => p !== ws);
-    const o = room.players[0];
-    if (o) send(o, { type: 'peerLeft', code: room.code });
+    room.ready[ws._idx] = false;                     // libère l'état prêt de ce joueur
+    broadcast(room, { type: 'peerLeft', idx: ws._idx, members: members(room), code: room.code }, null);
     if (room.players.length === 0) {
       room.emptyAt = Date.now();
       setTimeout(() => { const r = rooms.get(room.code); if (r && r.players.length === 0) rooms.delete(room.code); }, 15 * 60 * 1000);
