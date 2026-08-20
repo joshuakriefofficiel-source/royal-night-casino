@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '76';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '77';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2336,7 +2336,8 @@ const ImportExport = (() => {
 
   // Coût de transport pour une distance donnée (utilisé par l'automatisation).
   const shipCostFor = (d, price) => 40 + Math.round(d * 0.025) + Math.round(price * 0.006);
-  /** Négoce automatique exécuté par les employés (avec leurs bonus `mods`). */
+  /** Négoce automatique des employés : achète les MEILLEURS produits (les plus chers
+   *  et rentables) que le solde permet, et les revend sur le marché le plus offrant. */
   const autoTrade = (mods = {}) => {
     const me = originCountry(); const meC = CENTROID[me]; if (!meC) return null;
     const buyDiscount = mods.buyDiscount || 0, saleBonus = mods.saleBonus || 0;
@@ -2344,37 +2345,52 @@ const ImportExport = (() => {
     const shipMult = mods.shipMult != null ? mods.shipMult : 1;
     const delayMult = mods.delayMult != null ? mods.delayMult : 1;
     const cats = ['velo', 'voiture', 'bateau', 'avion'];
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const c = cats[Math.floor(Math.random() * cats.length)];
-      const sources = Concession.sourceCountries(c);
-      if (!sources.length) continue;
-      const source = sources[Math.floor(Math.random() * sources.length)];
-      const models = Concession.models(c, source);
-      if (!models || !models.length) continue;
-      const [name, rawPrice] = models[Math.floor(Math.random() * models.length)];
-      const buyPrice = Math.round(rawPrice * (1 - buyDiscount));                 // remise de l'acheteur
-      const buyShip = Math.round(shipCostFor(haversine(meC, CENTROID[source] || meC), rawPrice) * shipMult);
-      let best = null;
+
+    // 1) Catalogue complet des modèles disponibles (tous pays constructeurs).
+    const candidates = [];
+    for (const c of cats) {
+      for (const source of (Concession.sourceCountries(c) || [])) {
+        const models = Concession.models(c, source); if (!models) continue;
+        const sc = CENTROID[source] || meC; const dSrc = haversine(meC, sc);
+        for (const [name, rawPrice] of models) {
+          const buyPrice = Math.round(rawPrice * (1 - buyDiscount));
+          const buyShip = Math.round(shipCostFor(dSrc, rawPrice) * shipMult);
+          candidates.push({ c, name, rawPrice, buyPrice, buyShip });
+        }
+      }
+    }
+    // 2) On ne garde que l'abordable, puis on vise les PLUS CHERS (meilleurs produits).
+    const affordable = candidates.filter((x) => x.buyPrice + x.buyShip < Bank.balance);
+    if (!affordable.length) return null;
+    affordable.sort((a, b) => b.rawPrice - a.rawPrice);
+    const pool = affordable.slice(0, 30);   // les 30 modèles les plus chers abordables
+
+    // 3) Pour chacun, on trouve le marché le plus offrant, et on garde la marge max.
+    let bestDeal = null;
+    for (const x of pool) {
+      let mkt = null;
       for (const country of ALL) {
         const pc = CENTROID[country]; if (!pc) continue;
         const d = haversine(meC, pc);
-        const saleNet = Math.round(grossUnit(country, name, rawPrice) * (1 - tax) * (1 + saleBonus));
-        const sellShip = Math.round(shipCostFor(d, rawPrice) * shipMult);
-        const profit = saleNet - buyPrice - buyShip - sellShip;
-        if (!best || profit > best.profit) best = { country, saleNet, profit, dist: d, sellShip };
+        const saleNet = Math.round(grossUnit(country, x.name, x.rawPrice) * (1 - tax) * (1 + saleBonus));
+        const sellShip = Math.round(shipCostFor(d, x.rawPrice) * shipMult);
+        const profit = saleNet - x.buyPrice - x.buyShip - sellShip;
+        if (!mkt || profit > mkt.profit) mkt = { country, saleNet, profit, dist: d, sellShip };
       }
-      if (best && best.profit > 0) {
-        const total = buyPrice + buyShip + best.sellShip;
-        if (total > Bank.balance) continue;              // on n'achète que ce qu'on peut payer
-        Bank.debit(total);                               // 💸 l'argent est PRIS à l'achat
-        Bank.logTx(-total, `Auto-achat ${name}`);
-        const delay = clamp((6000 + best.dist * 3) * delayMult, 4000, 80000);
-        Bank.shipments.push({ id: Date.now() + Math.random(), type: 'export', cat: c, name, qty: 1, partner: best.country, arriveAt: Date.now() + delay, value: best.saleNet });
-        Bank.persist();
-        return { name, cost: total, market: best.country, saleNet: best.saleNet };
+      if (mkt && mkt.profit > 0) {
+        const total = x.buyPrice + x.buyShip + mkt.sellShip;
+        if (total <= Bank.balance && (!bestDeal || mkt.profit > bestDeal.mkt.profit)) bestDeal = { x, mkt, total };
       }
     }
-    return null;
+    if (!bestDeal) return null;
+
+    const { x, mkt, total } = bestDeal;
+    Bank.debit(total);                               // 💸 l'argent est PRIS à l'achat
+    Bank.logTx(-total, `Auto-achat ${x.name}`);
+    const delay = clamp((6000 + mkt.dist * 3) * delayMult, 4000, 80000);
+    Bank.shipments.push({ id: Date.now() + Math.random(), type: 'export', cat: x.c, name: x.name, qty: 1, partner: mkt.country, arriveAt: Date.now() + delay, value: mkt.saleNet });
+    Bank.persist();
+    return { name: x.name, cost: total, market: mkt.country, saleNet: mkt.saleNet };
   };
 
   return { init, onEnter, autoTrade };
