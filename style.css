@@ -29,7 +29,12 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+/* Mobile : désactive le zoom par double-tap (taps rapides) tout en gardant le
+   défilement et le pinch-zoom volontaire (accessibilité). */
+*{touch-action:manipulation}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* Empêche la sélection/loupe iOS sur les boutons quand on tape vite plusieurs fois */
+button,.btn-primary,.btn-ghost,.btn-action,.bet-chip,.nav-link,.game-card,.duo-emotes button,.wheel-btn,.ie-tab,.ie-cat,.slot-num,[data-nav],[data-game]{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 body{
   font-family:var(--font-ui);
   background:
