@@ -835,8 +835,19 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 
 /* ─────────── RESPONSIVE ─────────── */
 @media (max-width:720px){
-  .nav-links{display:none}
+  /* La barre passe sur 2 lignes : infos joueur en haut, catégories dessous. */
+  .navbar{flex-wrap:wrap;gap:.45rem .5rem;padding:.5rem .7rem}
   .brand-name{display:none}
+  .nav-right{gap:.4rem}
+  .level-pill{padding:.28rem .55rem}
+  .balance-pill{padding:.36rem .6rem}
+  /* Catégories : 2e ligne pleine largeur, défilable horizontalement au doigt. */
+  .nav-links{order:3;flex-basis:100%;width:100%;gap:.4rem;flex-wrap:nowrap;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;padding:.15rem 0 .05rem;
+    scrollbar-width:none;-ms-overflow-style:none;scroll-snap-type:x proximity}
+  .nav-links::-webkit-scrollbar{display:none}
+  .nav-link{flex:0 0 auto;white-space:nowrap;scroll-snap-align:start;
+    padding:.42rem .8rem;font-size:.82rem;background:var(--glass);border:1px solid var(--line)}
   .home-stats{gap:1.4rem}
   .dice-vs{width:100%;order:2}
 }
@@ -845,4 +856,6 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
   .seat{min-width:104px}
   .btn-primary.big{min-width:200px;width:100%;max-width:320px}
   .slot-machine{gap:.5rem}
+  .audio-controls .ico-btn{width:34px;height:34px}
+  .nav-link{padding:.4rem .7rem;font-size:.8rem}
 }
