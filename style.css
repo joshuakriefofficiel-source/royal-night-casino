@@ -677,6 +677,7 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
   background:#0d0d10;border:1px solid var(--line);color:var(--txt-dim)}
 .duo-perk.done{border-color:rgba(63,174,107,.5);color:#7fe0a0;background:rgba(63,174,107,.08)}
 .duo-perk .duo-perk-ico{font-size:1rem}
+.duo-contract-text{color:var(--gold-2);font-size:.95rem;font-family:var(--font-display);letter-spacing:.02em}
 
 /* Badge de version (repère de cache) */
 .ver-badge{position:fixed;right:10px;bottom:10px;z-index:250;font-family:var(--font-display);font-weight:700;font-size:.9rem;

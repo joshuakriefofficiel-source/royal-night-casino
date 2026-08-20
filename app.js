@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '69';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '70';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2235,6 +2235,8 @@ const ImportExport = (() => {
           Bank.addXp(xp);
           UI.toast(`💰 Vente encaissée : +${fmt(s.value)} € · +${xp} XP (${s.name} → ${s.partner}).`, 'win');
           Sound.play('win'); UI.coinRain(12);
+          // Fait progresser les contrats coopératifs (nb de ventes + chiffre).
+          if (Multiplayer && Multiplayer.contractProgress) { Multiplayer.contractProgress('sell', s.qty || 1); Multiplayer.contractProgress('revenue', s.value); }
         }
         ships.splice(i, 1); changed = true;
       }
@@ -3067,6 +3069,37 @@ const Multiplayer = (() => {
     if (reached !== tierReached) { tierReached = reached; saveTier(); }
   };
 
+  // ── Contrats coopératifs (mission aléatoire, renouvelée à chaque réussite) ──
+  const mpHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
+  const CONTRACTS = [
+    { type: 'sell',    verb: (t) => `Vendre ${t} véhicules à l'export`, targets: [3, 5, 8, 12] },
+    { type: 'revenue', verb: (t) => `Réaliser ${fmtMoney(t)} de ventes`, targets: [120000, 300000, 700000] },
+    { type: 'deposit', verb: (t) => `Déposer ${fmtMoney(t)} au coffre du duo`, targets: [60000, 150000, 400000] },
+  ];
+  let contractIdx = 0, contractProg = 0;
+  const cIdxKey = () => 'rnc_ctrIdx_' + (savedDuoCode() || 'x');
+  const cProgKey = () => 'rnc_ctrProg_' + (savedDuoCode() || 'x');
+  const loadContract = () => { contractIdx = Number(localStorage.getItem(cIdxKey()) || 0); contractProg = Number(localStorage.getItem(cProgKey()) || 0); };
+  const saveContract = () => { localStorage.setItem(cIdxKey(), String(contractIdx)); localStorage.setItem(cProgKey(), String(contractProg)); };
+  const currentContract = () => {
+    const c = CONTRACTS[mpHash('ctr#' + (savedDuoCode() || 'x') + '#' + contractIdx) % CONTRACTS.length];
+    const target = c.targets[mpHash('tgt#' + contractIdx) % c.targets.length];
+    const reward = 40000 + contractIdx * 20000;   // récompense croissante
+    return { type: c.type, target, reward, text: c.verb(target) };
+  };
+  const contractProgress = (type, amount) => {
+    if (!active) return;
+    const c = currentContract();
+    if (c.type !== type) return;
+    contractProg += amount;
+    if (contractProg >= c.target) {
+      Bank.credit(c.reward); Bank.logTx && Bank.logTx(c.reward, 'Contrat du duo accompli');
+      UI.toast(`📜 Contrat accompli : ${c.text} ! +${fmtMoney(c.reward)}`, 'win'); Sound.play('jackpot'); UI.coinRain(18);
+      contractIdx++; contractProg = 0;
+    }
+    saveContract(); renderDuoPanel();
+  };
+
   const init = () => {
     modal = $('#mp');
     $('#mpClose').addEventListener('click', close);
@@ -3227,6 +3260,7 @@ const Multiplayer = (() => {
     const ss = $('#slotSelect'); if (ss) ss.classList.add('hidden');
     $('#navbar').classList.remove('hidden');
     loadTier();                 // charge le palier de coffre déjà atteint (ce duo)
+    loadContract();             // charge le contrat en cours (ce duo)
     renderDuoHud();
     if (!listenersWired) {   // on n'abonne les écouteurs qu'une seule fois
       listenersWired = true;
@@ -3321,6 +3355,13 @@ const Multiplayer = (() => {
         ? owned.map((v) => `<option value="${(v.cat + '|' + v.name).replace(/"/g, '&quot;')}">${v.name} (×${v.qty})</option>`).join('')
         : '<option value="">Aucun véhicule en stock</option>';
     }
+    // Contrat en cours
+    const ct = currentContract();
+    const cText = $('#duoContractText'); if (cText) cText.textContent = `${ct.text}  ·  récompense ${fmtMoney(ct.reward)}`;
+    const isMoney = ct.type !== 'sell';
+    const pctC = clamp(Math.round(contractProg / ct.target * 100), 0, 100);
+    const cBar = $('#duoContractBar'); if (cBar) cBar.style.width = pctC + '%';
+    const cProg = $('#duoContractProg'); if (cProg) cProg.textContent = isMoney ? `${fmtMoney(contractProg)} / ${fmtMoney(ct.target)}` : `${contractProg} / ${ct.target}`;
   };
   // Emotes / pings entre partenaires.
   const showEmote = (emoji) => {
@@ -3345,6 +3386,7 @@ const Multiplayer = (() => {
     setMyDeposited(myDeposited() + amount);
     syncOut(true);
     UI.toast(`🏦 ${fmtMoney(amount)} déposés dans le coffre du duo !`, 'win'); Sound.play('chip'); UI.coinRain(8);
+    contractProgress('deposit', amount);
     checkTiers(); renderDuoHud(); renderDuoPanel();
   };
   const sendMoney = (amount) => {
@@ -3391,7 +3433,7 @@ const Multiplayer = (() => {
   // Sinon (menu/salon), on referme la connexion.
   const close = () => { Sound.play('click'); if (active) { modal.classList.add('hidden'); } else { teardown(); } };
 
-  return { init, openMenu, claimCountry, saleBonus, get active() { return active; }, get partnerCountry() { return partnerCountry; }, get peerName() { return peerName; } };
+  return { init, openMenu, claimCountry, saleBonus, contractProgress, get active() { return active; }, get partnerCountry() { return partnerCountry; }, get peerName() { return peerName; } };
 })();
 
 /* ======================================================================
