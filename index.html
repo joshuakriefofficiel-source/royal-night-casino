@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=67">
+<link rel="stylesheet" href="style.css?v=68">
 </head>
 <body>
 
@@ -724,12 +724,50 @@
 
 <!-- ══════════════════ HUD DUO (co-op temps réel) ══════════════════ -->
 <div id="duoHud" class="duo-hud hidden" aria-live="polite">
-  <div class="duo-head">🤝 <b>Duo</b> <span id="duoLink" class="duo-link">● en ligne</span></div>
+  <div class="duo-head">🤝 <b>Duo</b> <span class="duo-rank" id="duoRank">Novices</span> <span id="duoLink" class="duo-link">● en ligne</span></div>
   <div class="duo-row"><span class="duo-lab" id="duoPName">Partenaire</span><span class="duo-val" id="duoPStat">—</span></div>
   <div class="duo-goal">
-    <div class="duo-goal-top"><span>Objectif commun</span><span id="duoGoalPct">0 %</span></div>
+    <div class="duo-goal-top"><span>🏦 Coffre du duo</span><span id="duoGoalPct">0 %</span></div>
     <div class="duo-bar"><div class="duo-bar-fill" id="duoBarFill"></div></div>
-    <div class="duo-goal-sub" id="duoGoalSub">Fortune cumulée 0 € / 1 000 000 €</div>
+    <div class="duo-goal-sub" id="duoGoalSub">0 € / 100 000 €</div>
+  </div>
+  <button class="duo-open" id="duoOpen">🏦 Coffre &amp; cadeaux</button>
+</div>
+
+<!-- ══════════════════ PANNEAU DUO (coffre, rang, cadeaux) ══════════════════ -->
+<div id="duoPanel" class="duo-panel hidden">
+  <div class="duo-panel-box">
+    <button class="duo-panel-close" id="duoPanelClose" aria-label="Fermer">✕</button>
+    <h2 class="duo-panel-title">🤝 Le Duo</h2>
+    <div class="duo-rank-big" id="duoRankBig">Novices</div>
+
+    <!-- Coffre commun -->
+    <section class="duo-sec">
+      <h3 class="duo-sec-h">🏦 Coffre du duo</h3>
+      <div class="duo-vault-total" id="duoVaultTotal">0 €</div>
+      <div class="duo-bar big"><div class="duo-bar-fill" id="duoPanelBar"></div></div>
+      <p class="duo-sec-sub" id="duoVaultNext">Prochain palier : 100 000 €</p>
+      <div class="duo-deposit">
+        <input id="duoDepositInput" class="duo-input" type="number" min="1" inputmode="numeric" placeholder="Montant à déposer…">
+        <button class="btn-primary" id="duoDepositBtn">Déposer</button>
+      </div>
+      <p class="duo-sec-note">Vous déposez tous les deux dans la même caisse. Chaque palier débloque un bonus de vente pour les 2 + une prime !</p>
+      <div class="duo-perks" id="duoPerks"></div>
+    </section>
+
+    <!-- Cadeaux / entraide -->
+    <section class="duo-sec">
+      <h3 class="duo-sec-h">🎁 Envoyer à mon partenaire</h3>
+      <div class="duo-deposit">
+        <input id="duoGiftMoney" class="duo-input" type="number" min="1" inputmode="numeric" placeholder="Montant en €…">
+        <button class="btn-ghost" id="duoGiftMoneyBtn">💸 Envoyer</button>
+      </div>
+      <div class="duo-deposit">
+        <select id="duoGiftVehicle" class="duo-input"></select>
+        <button class="btn-ghost" id="duoGiftVehicleBtn">🚚 Expédier</button>
+      </div>
+      <p class="duo-sec-note">Dépanne ton pote ou alimente son stock : il revend là où la demande est forte chez lui. Bien plus rentable à deux !</p>
+    </section>
   </div>
 </div>
 
@@ -750,7 +788,7 @@
   </div>
 </div>
 
-<script src="world.js?v=67"></script>
-<script src="app.js?v=67"></script>
+<script src="world.js?v=68"></script>
+<script src="app.js?v=68"></script>
 </body>
 </html>

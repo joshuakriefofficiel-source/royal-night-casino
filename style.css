@@ -612,6 +612,42 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .duo-bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--gold-deep),var(--gold-2));transition:width .5s cubic-bezier(.2,.8,.2,1)}
 .duo-goal-sub{font-size:.72rem;color:var(--txt-dim);margin-top:.3rem;font-variant-numeric:tabular-nums}
 @media(prefers-reduced-motion:reduce){.duo-bar-fill{transition:none}}
+.duo-rank{font-size:.68rem;color:#1a1206;background:linear-gradient(180deg,var(--gold-2),var(--gold-deep));
+  padding:.05rem .4rem;border-radius:6px;font-weight:700;letter-spacing:.03em}
+.duo-open{width:100%;margin-top:.6rem;background:var(--glass);border:1px solid var(--gold-deep);color:var(--gold-2);
+  border-radius:9px;padding:.45rem;font-size:.8rem;font-weight:600;cursor:pointer;transition:border-color .2s,background .2s}
+.duo-open:hover{border-color:var(--gold);background:rgba(217,180,91,.12)}
+
+/* ─── Panneau Duo (coffre, rang, cadeaux) ─── */
+.duo-panel{position:fixed;inset:0;z-index:215;display:grid;place-items:center;padding:1.2rem;overflow-y:auto;
+  background:rgba(5,5,8,.72);backdrop-filter:blur(6px)}
+.duo-panel.hidden{display:none}
+.duo-panel-box{position:relative;width:min(440px,94vw);max-height:92vh;overflow-y:auto;
+  background:linear-gradient(180deg,#191712,#0e0d0b);border:1px solid var(--gold-deep);border-radius:18px;
+  padding:1.4rem;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.duo-panel-close{position:absolute;top:.7rem;right:.7rem;width:34px;height:34px;border-radius:50%;
+  background:var(--glass);border:1px solid var(--line);color:var(--txt-dim);cursor:pointer}
+.duo-panel-close:hover{border-color:var(--gold);color:var(--gold-2)}
+.duo-panel-title{font-family:var(--font-display);font-weight:700;color:var(--gold-2);font-size:1.4rem;letter-spacing:.03em;text-align:center}
+.duo-rank-big{text-align:center;margin:.3rem 0 1rem;font-family:var(--font-serif);font-style:italic;font-size:1.15rem;
+  background:linear-gradient(180deg,#fff,var(--gold-2) 50%,var(--gold-deep));-webkit-background-clip:text;background-clip:text;color:transparent}
+.duo-sec{background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:1rem;margin-bottom:1rem}
+.duo-sec-h{font-family:var(--font-display);color:var(--gold-2);font-size:1.05rem;letter-spacing:.04em;margin-bottom:.6rem}
+.duo-sec-sub{font-size:.8rem;color:var(--gold);margin:.3rem 0}
+.duo-sec-note{font-size:.75rem;color:var(--txt-dim);font-family:var(--font-serif);font-style:italic;margin-top:.6rem}
+.duo-vault-total{font-family:var(--font-display);font-size:2rem;color:var(--gold-2);text-align:center;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 20px rgba(217,180,91,.4)}
+.duo-bar.big{height:12px;border-radius:7px;margin:.5rem 0}
+.duo-deposit{display:flex;gap:.5rem;margin-top:.6rem}
+.duo-input{flex:1;min-width:0;background:#0a0a0d;border:1px solid var(--line);border-radius:10px;color:var(--gold-2);
+  padding:.55rem .7rem;font-family:var(--font-ui);font-size:.95rem;outline:none}
+.duo-input:focus-visible{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,180,91,.2)}
+.duo-deposit .btn-primary,.duo-deposit .btn-ghost{padding:.55rem 1rem;font-size:.85rem;white-space:nowrap}
+.duo-perks{display:flex;flex-direction:column;gap:.35rem;margin-top:.7rem}
+.duo-perk{display:flex;align-items:center;gap:.5rem;font-size:.8rem;padding:.4rem .6rem;border-radius:9px;
+  background:#0d0d10;border:1px solid var(--line);color:var(--txt-dim)}
+.duo-perk.done{border-color:rgba(63,174,107,.5);color:#7fe0a0;background:rgba(63,174,107,.08)}
+.duo-perk .duo-perk-ico{font-size:1rem}
 
 /* Badge de version (repère de cache) */
 .ver-badge{position:fixed;right:10px;bottom:10px;z-index:250;font-family:var(--font-display);font-weight:700;font-size:.9rem;

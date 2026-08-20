@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '67';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '68';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1986,8 +1986,10 @@ const ImportExport = (() => {
 
   let CENTROID = {}, ALL = [];
   let els = {}, mode = 'export', cat = 'voiture', partner = '', dist = 0, delayMs = 0, shipBase = 0, duoDeal = false, lastEpoch = -1;
+  // Bonus de vente partagé débloqué par les paliers du coffre du duo.
+  const duoMult = () => 1 + ((Multiplayer && Multiplayer.saleBonus) ? Multiplayer.saleBonus() : 0);
   // Vente nette : douane 0 % + bonus quand on commerce avec le partenaire de duo.
-  const saleNet = (name, base) => duoDeal ? Math.round(grossUnit(partner, name, base) * 1.15) : netUnit(partner, name, base);
+  const saleNet = (name, base) => Math.round((duoDeal ? grossUnit(partner, name, base) * 1.15 : netUnit(partner, name, base)) * duoMult());
   // Transport d'UN véhicule : part fixe distance + 0,6 % de la valeur (réduit).
   const shipFor = (price) => shipBase + Math.round(price * 0.006);
 
@@ -2103,8 +2105,8 @@ const ImportExport = (() => {
   // Net encaissé pour un pays quelconque (utilisé par le tableau des marchés).
   const netForCountry = (country, name, base) =>
     (Multiplayer.active && country === Multiplayer.partnerCountry)
-      ? Math.round(grossUnit(country, name, base) * 1.15)              // bonus duo (douane 0 %)
-      : Math.round(grossUnit(country, name, base) * (1 - TAX));
+      ? Math.round(grossUnit(country, name, base) * 1.15 * duoMult())   // bonus duo (douane 0 %) + paliers
+      : Math.round(grossUnit(country, name, base) * (1 - TAX) * duoMult());
 
   // Tableau défilable : TOUS les pays + le bénéfice qu'ils rapportent,
   // pour les véhicules de la catégorie choisie (cliquer un pays le sélectionne).
@@ -2934,7 +2936,41 @@ const Multiplayer = (() => {
   // quand on veut avec le même code, sans perdre sa sauvegarde.
   const DUO_KEY = 'rnc_duoCode';
   const savedDuoCode = () => (localStorage.getItem(DUO_KEY) || '').toUpperCase();
-  const setDuoCode = (c) => { code = c; if (c) localStorage.setItem(DUO_KEY, c); };
+  const setDuoCode = (c) => { code = c; if (c) localStorage.setItem(DUO_KEY, c); loadTier(); };
+
+  // ── Coffre du Duo + Rang + paliers de bonus (partagés) ────────────────────
+  // Chaque joueur mémorise SA contribution (par code de partie) ; le total du
+  // coffre = ma contribution + celle du partenaire (reçue par la synchro).
+  const TIERS = [
+    { at: 100000,   bonus: 0.03, reward: 15000,  rank: 'Négociants' },
+    { at: 500000,   bonus: 0.06, reward: 60000,  rank: 'Négociants' },
+    { at: 1500000,  bonus: 0.10, reward: 200000, rank: 'Magnats' },
+    { at: 5000000,  bonus: 0.15, reward: 700000, rank: 'Empereurs du commerce' },
+  ];
+  let tierReached = 0;
+  const depoKey = () => 'rnc_vault_' + (savedDuoCode() || 'x');
+  const tierKey = () => 'rnc_vtier_' + (savedDuoCode() || 'x');
+  const myDeposited = () => Number(localStorage.getItem(depoKey()) || 0);
+  const setMyDeposited = (v) => localStorage.setItem(depoKey(), String(Math.max(0, Math.round(v))));
+  const loadTier = () => { tierReached = Number(localStorage.getItem(tierKey()) || 0); };
+  const saveTier = () => localStorage.setItem(tierKey(), String(tierReached));
+  const vaultTotal = () => myDeposited() + ((partnerState && partnerState.deposited) || 0);
+  const rankFor = (t) => t >= 5000000 ? 'Empereurs du commerce' : t >= 1500000 ? 'Magnats' : t >= 100000 ? 'Négociants' : 'Novices';
+  // Bonus de vente partagé accordé par les paliers (appliqué à l'Import/Export).
+  const saleBonus = () => (active && tierReached > 0) ? TIERS[tierReached - 1].bonus : 0;
+  // Crédite les récompenses de palier franchies (chaque joueur pour lui-même).
+  const checkTiers = () => {
+    const total = vaultTotal();
+    let reached = tierReached;
+    while (reached < TIERS.length && total >= TIERS[reached].at) {
+      const t = TIERS[reached];
+      Bank.credit(t.reward); Bank.logTx && Bank.logTx(t.reward, 'Prime palier du duo');
+      UI.toast(`🏆 Palier du duo ${fmtMoney(t.at)} atteint ! +${fmtMoney(t.reward)} et +${Math.round(t.bonus * 100)}% de ventes pour vous deux !`, 'win');
+      Sound.play('jackpot'); UI.coinRain(24);
+      reached++;
+    }
+    if (reached !== tierReached) { tierReached = reached; saveTier(); }
+  };
 
   const init = () => {
     modal = $('#mp');
@@ -2946,6 +2982,12 @@ const Multiplayer = (() => {
     $('#mpJoinGo').addEventListener('click', join);
     $('#mpReady').addEventListener('click', ready);
     $('#mpShare2').addEventListener('click', shareInvite);
+    // Panneau Duo (coffre, rang, cadeaux/sauvetage)
+    const dOpen = $('#duoOpen'); if (dOpen) dOpen.addEventListener('click', openDuoPanel);
+    const dClose = $('#duoPanelClose'); if (dClose) dClose.addEventListener('click', closeDuoPanel);
+    const dDep = $('#duoDepositBtn'); if (dDep) dDep.addEventListener('click', () => { const el = $('#duoDepositInput'); depositToVault(el.value); el.value = ''; });
+    const gM = $('#duoGiftMoneyBtn'); if (gM) gM.addEventListener('click', () => { const el = $('#duoGiftMoney'); sendMoney(el.value); el.value = ''; });
+    const gV = $('#duoGiftVehicleBtn'); if (gV) gV.addEventListener('click', () => { const el = $('#duoGiftVehicle'); if (el && el.value) sendVehicle(el.value); });
     // Saisie du code : passage auto d'une case à l'autre.
     const inputs = $$('#mpCodeInput input');
     inputs.forEach((inp, i) => {
@@ -3060,8 +3102,18 @@ const Multiplayer = (() => {
     else if (m.type === 'peerResumed') { peerName = (m.names[idx === 0 ? 1 : 0]) || peerName; UI.toast(`🔁 ${peerName || 'Votre partenaire'} est de retour !`, 'win'); Sound.play('win'); syncOut(true); renderDuoHud(); }
     else if (m.type === 'peerCountry') { partnerCountry = m.country; }
     else if (m.type === 'relay') {
-      if (m.kind === 'sync') { partnerState = m.data || null; if (m.data && m.data.country) partnerCountry = m.data.country; renderDuoHud(); }
+      if (m.kind === 'sync') {
+        partnerState = m.data || null;
+        if (m.data && m.data.country) partnerCountry = m.data.country;
+        checkTiers();                    // le coffre a pu franchir un palier
+        renderDuoHud(); renderDuoPanel();
+      }
       else if (m.kind === 'hello') { syncOut(true); }   // le partenaire demande notre état
+      else if (m.kind === 'gift') {                       // cadeau reçu (argent ou véhicule)
+        if (m.money) { Bank.credit(m.money); Bank.logTx && Bank.logTx(m.money, 'Cadeau du partenaire'); UI.toast(`🎁 ${peerName || 'Votre partenaire'} vous a envoyé ${fmtMoney(m.money)} !`, 'win'); Sound.play('win'); UI.coinRain(10); }
+        if (m.vehicle) { const v = m.vehicle, k = v.cat + '|' + v.name, inv = Bank.inventory; if (inv[k]) inv[k].qty += (v.qty || 1); else inv[k] = { cat: v.cat, name: v.name, price: v.price, qty: (v.qty || 1) }; Bank.persist(); UI.toast(`🚚 ${peerName || 'Votre partenaire'} vous a expédié ${v.qty || 1}× ${v.name} ! Revendez-le où la demande est forte.`, 'win'); Sound.play('win'); UI.coinRain(6); }
+        renderDuoPanel();
+      }
     }
     else if (m.type === 'countryOk') { if (countryResolve) { countryResolve(true); countryResolve = null; } }
     else if (m.type === 'countryRejected') { if (countryResolve) { countryResolve(false); countryResolve = null; } }
@@ -3077,6 +3129,7 @@ const Multiplayer = (() => {
     modal.classList.add('hidden');
     const ss = $('#slotSelect'); if (ss) ss.classList.add('hidden');
     $('#navbar').classList.remove('hidden');
+    loadTier();                 // charge le palier de coffre déjà atteint (ce duo)
     renderDuoHud();
     if (!listenersWired) {   // on n'abonne les écouteurs qu'une seule fois
       listenersWired = true;
@@ -3115,6 +3168,7 @@ const Multiplayer = (() => {
     country: (Bank.company && Bank.company.country) || '',
     balance: Math.round(Bank.balance || 0),
     level: Bank.level || 1,
+    deposited: myDeposited(),           // ma contribution au coffre du duo
   });
   const syncOut = (force) => {
     if (!active || !ws || ws.readyState !== 1) return;
@@ -3134,12 +3188,75 @@ const Multiplayer = (() => {
     const ps = partnerState;
     $('#duoPName').textContent = (ps && ps.name) || peerName || 'Partenaire';
     $('#duoPStat').textContent = ps ? ('Niv. ' + ps.level + ' · ' + fmtMoney(ps.balance)) : 'en attente…';
-    const mine = Math.round(Bank.balance || 0);
-    const total = mine + ((ps && ps.balance) || 0);
-    const pct = Math.max(0, Math.min(100, Math.round(total / DUO_GOAL * 100)));
+    const total = vaultTotal();
+    const rk = $('#duoRank'); if (rk) rk.textContent = rankFor(total);
+    const next = TIERS.find((t) => total < t.at);
+    const prevAt = tierReached > 0 ? TIERS[tierReached - 1].at : 0;
+    const targetAt = next ? next.at : TIERS[TIERS.length - 1].at;
+    const pct = next ? clamp(Math.round((total - prevAt) / (targetAt - prevAt) * 100), 0, 100) : 100;
     $('#duoGoalPct').textContent = pct + ' %';
     $('#duoBarFill').style.width = pct + '%';
-    $('#duoGoalSub').textContent = 'Fortune cumulée ' + fmtMoney(total) + ' / ' + fmtMoney(DUO_GOAL);
+    $('#duoGoalSub').textContent = fmtMoney(total) + ' / ' + fmtMoney(targetAt);
+  };
+
+  // ── Panneau Duo : coffre, rang, paliers, cadeaux/sauvetage ────────────────
+  const renderDuoPanel = () => {
+    const p = $('#duoPanel'); if (!p || p.classList.contains('hidden')) return;
+    const total = vaultTotal();
+    $('#duoRankBig').textContent = rankFor(total);
+    $('#duoVaultTotal').textContent = fmtMoney(total);
+    const next = TIERS.find((t) => total < t.at);
+    const prevAt = tierReached > 0 ? TIERS[tierReached - 1].at : 0;
+    const targetAt = next ? next.at : TIERS[TIERS.length - 1].at;
+    const pct = next ? clamp(Math.round((total - prevAt) / (targetAt - prevAt) * 100), 0, 100) : 100;
+    $('#duoPanelBar').style.width = pct + '%';
+    $('#duoVaultNext').textContent = next
+      ? `Prochain palier : ${fmtMoney(next.at)}  (+${Math.round(next.bonus * 100)}% ventes · prime ${fmtMoney(next.reward)} chacun)`
+      : '👑 Tous les paliers atteints — Empereurs du commerce !';
+    $('#duoPerks').innerHTML = TIERS.map((t) => {
+      const done = total >= t.at;
+      return `<div class="duo-perk${done ? ' done' : ''}"><span class="duo-perk-ico">${done ? '✅' : '🔒'}</span> ${fmtMoney(t.at)} → +${Math.round(t.bonus * 100)}% ventes · prime ${fmtMoney(t.reward)}</div>`;
+    }).join('');
+    const sel = $('#duoGiftVehicle');
+    if (sel) {
+      const owned = Object.values(Bank.inventory || {}).filter((v) => v && v.qty > 0);
+      sel.innerHTML = owned.length
+        ? owned.map((v) => `<option value="${(v.cat + '|' + v.name).replace(/"/g, '&quot;')}">${v.name} (×${v.qty})</option>`).join('')
+        : '<option value="">Aucun véhicule en stock</option>';
+    }
+  };
+  const openDuoPanel = () => { if (!active) return; $('#duoPanel').classList.remove('hidden'); renderDuoPanel(); Sound.play('select'); };
+  const closeDuoPanel = () => { $('#duoPanel').classList.add('hidden'); Sound.play('click'); };
+
+  const depositToVault = (amount) => {
+    amount = Math.floor(Number(amount) || 0);
+    if (amount <= 0) { UI.toast('Montant invalide.', 'lose'); return; }
+    if (Bank.balance < amount) { UI.toast('Solde insuffisant.', 'lose'); return; }
+    Bank.debit(amount); Bank.logTx && Bank.logTx(-amount, 'Dépôt coffre du duo');
+    setMyDeposited(myDeposited() + amount);
+    syncOut(true);
+    UI.toast(`🏦 ${fmtMoney(amount)} déposés dans le coffre du duo !`, 'win'); Sound.play('chip'); UI.coinRain(8);
+    checkTiers(); renderDuoHud(); renderDuoPanel();
+  };
+  const sendMoney = (amount) => {
+    amount = Math.floor(Number(amount) || 0);
+    if (amount <= 0) { UI.toast('Montant invalide.', 'lose'); return; }
+    if (Bank.balance < amount) { UI.toast('Solde insuffisant.', 'lose'); return; }
+    if (!ws || ws.readyState !== 1) { UI.toast('Partenaire hors ligne — envoi impossible.', 'lose'); return; }
+    Bank.debit(amount); Bank.logTx && Bank.logTx(-amount, 'Cadeau au partenaire');
+    send({ type: 'relay', kind: 'gift', money: amount });
+    UI.toast(`💸 ${fmtMoney(amount)} envoyés à votre partenaire !`, 'win'); Sound.play('chip');
+    renderDuoPanel();
+  };
+  const sendVehicle = (key) => {
+    const inv = Bank.inventory, item = inv[key];
+    if (!item || item.qty < 1) { UI.toast('Aucun véhicule à envoyer.', 'lose'); return; }
+    if (!ws || ws.readyState !== 1) { UI.toast('Partenaire hors ligne — envoi impossible.', 'lose'); return; }
+    item.qty -= 1; if (item.qty <= 0) delete inv[key];
+    Bank.persist();
+    send({ type: 'relay', kind: 'gift', vehicle: { cat: item.cat, name: item.name, price: item.price, qty: 1 } });
+    UI.toast(`🚚 ${item.name} expédié à votre partenaire !`, 'win'); Sound.play('chip');
+    renderDuoPanel();
   };
 
   // Réserve un pays côté serveur (unicité). Renvoie true si accepté.
@@ -3160,12 +3277,12 @@ const Multiplayer = (() => {
     } catch (e) {}
   };
 
-  const teardown = () => { active = false; partnerCountry = null; partnerState = null; code = ''; clearInterval(syncTimer); syncTimer = null; const hud = $('#duoHud'); if (hud) hud.classList.add('hidden'); try { ws && ws.close(); } catch (e) {} ws = null; modal.classList.add('hidden'); };
+  const teardown = () => { active = false; partnerCountry = null; partnerState = null; code = ''; clearInterval(syncTimer); syncTimer = null; const hud = $('#duoHud'); if (hud) hud.classList.add('hidden'); const dp = $('#duoPanel'); if (dp) dp.classList.add('hidden'); try { ws && ws.close(); } catch (e) {} ws = null; modal.classList.add('hidden'); };
   // ✕ : si une partie est en cours, on ferme juste le menu (la partie continue).
   // Sinon (menu/salon), on referme la connexion.
   const close = () => { Sound.play('click'); if (active) { modal.classList.add('hidden'); } else { teardown(); } };
 
-  return { init, openMenu, claimCountry, get active() { return active; }, get partnerCountry() { return partnerCountry; }, get peerName() { return peerName; } };
+  return { init, openMenu, claimCountry, saleBonus, get active() { return active; }, get partnerCountry() { return partnerCountry; }, get peerName() { return peerName; } };
 })();
 
 /* ======================================================================
