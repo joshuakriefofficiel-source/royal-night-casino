@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=79">
+<link rel="stylesheet" href="style.css?v=83">
 </head>
 <body>
 
@@ -39,6 +39,7 @@
     <button class="nav-link" data-nav="casino" data-i18n="nav.casino">Casino</button>
     <button class="nav-link" data-nav="concession" data-modecat="commerce" data-i18n="nav.concession">Concession</button>
     <button class="nav-link" data-nav="importexport" data-modecat="commerce" data-i18n="nav.importexport">Import / Export</button>
+    <button class="nav-link" data-nav="social" data-modecat="commerce">📱 Réseau</button>
     <button class="nav-link" data-nav="agence" data-modecat="immobilier" data-i18n="nav.agence" hidden>Agence</button>
     <button class="nav-link" data-nav="ventelocation" data-modecat="immobilier" data-i18n="nav.ventelocation" hidden>Vente &amp; loc.</button>
     <button class="nav-link" data-nav="profile" data-i18n="nav.profil">Profil</button>
@@ -254,6 +255,54 @@
       </div>
     </div>
   </section>
+
+  <!-- ─────────── PAGE : RÉSEAU SOCIAL ─────────── -->
+  <section id="view-social" class="view">
+    <div class="social-app">
+      <header class="social-top">
+        <button class="back-link" data-nav="home">← Menu</button>
+        <span class="social-brand" id="socialBrand">Réseau</span>
+        <button class="social-newbtn" id="socialNewBtn" title="Nouveau post">＋</button>
+      </header>
+
+      <section class="social-profile">
+        <div class="social-avatar" id="socialAvatar">🏢</div>
+        <div class="social-pinfo">
+          <div class="social-pname" id="socialPName">Votre entreprise</div>
+          <div class="social-pstats">
+            <span><b id="socialPosts">0</b> posts</span>
+            <span><b id="socialFollowers">0</b> abonnés</span>
+            <span><b id="socialRepLevel">Niv. 1</b> réputation</span>
+          </div>
+          <div class="social-repbar"><i id="socialRepFill"></i></div>
+          <div class="social-repnote" id="socialRepNote">Réputation niv. 1 · 0 / 40 XP</div>
+        </div>
+      </section>
+
+      <div class="social-postbar">
+        <button class="btn-primary" id="socialPostCta">📸 Publier un post</button>
+        <span class="social-cooldown" id="socialCooldown"></span>
+      </div>
+
+      <div class="social-feed" id="socialFeed"></div>
+      <div class="social-feed-end" id="socialFeedMore">Chargement du fil…</div>
+    </div>
+  </section>
+
+  <!-- Modal de création de post -->
+  <div id="postModal" class="post-modal hidden">
+    <div class="post-box">
+      <div class="post-head"><span class="post-head-lab">Poste</span><span class="post-head-brand" id="postBrand">Réseau</span><button class="post-close" id="postClose" aria-label="Fermer">✕</button></div>
+      <div class="post-preview" id="postPreview"></div>
+      <div class="post-typerow">
+        <button class="post-type active" data-ptype="photo">📷 Photo</button>
+        <button class="post-type" data-ptype="reel">🎬 Reel</button>
+        <button class="post-shuffle" id="postShuffle" title="Changer le visuel">🔀</button>
+      </div>
+      <textarea id="postCaption" class="post-caption" maxlength="140" placeholder="Légende… promouvez votre entreprise ! #business"></textarea>
+      <button class="btn-primary big" id="postPublish">Publier</button>
+    </div>
+  </div>
 
   <!-- ─────────── PAGE : AGENCE IMMOBILIÈRE ─────────── -->
   <section id="view-agence" class="view">
@@ -500,8 +549,8 @@
     <div class="ob-step" data-step="1">
       <div class="ob-crest" id="obCrest">♠</div>
       <span class="ob-kicker" id="obKicker">✦ Bienvenue au Royal Night ✦</span>
-      <h2 class="ob-title" id="obStep1Title">Fondez votre entreprise</h2>
-      <p class="ob-lead" id="obStep1Lead">Tout commence par un nom. Celui de l'empire que vous vous apprêtez à bâtir.</p>
+      <h2 class="ob-title" id="obStep1Title">Bâtissez votre empire</h2>
+      <p class="ob-lead" id="obStep1Lead">Ici, votre <b>première fortune</b> se fait au <b>casino</b> — Dés, Blackjack, Poker et Machine à sous sont ouverts dès maintenant. Tentez votre chance si l'envie de <b>jouer avec le feu</b> vous prend… mais gardez la tête froide.<br><br>Avec <b>10 000 $</b> en poche, vous débloquez l'<b>Import / Export</b> : achetez des véhicules à la Concession et revendez-les à l'autre bout du monde, là où la demande explose. Faites-vous un nom sur le <b>réseau social</b> pour accélérer vos livraisons. Rien n'est automatique : chaque euro se gagne à la main. Comment s'appellera votre entreprise ?</p>
       <label class="ob-field-label" for="obName" id="obNameLabel">Nom de l'entreprise</label>
       <input id="obName" class="ob-input" maxlength="28" autocomplete="off" placeholder="Ex. Royal Ventures & Cie">
       <button id="obNext" class="btn-primary big">Continuer&nbsp;→</button>
@@ -835,7 +884,7 @@
   </div>
 </div>
 
-<script src="world.js?v=79"></script>
-<script src="app.js?v=79"></script>
+<script src="world.js?v=83"></script>
+<script src="app.js?v=83"></script>
 </body>
 </html>

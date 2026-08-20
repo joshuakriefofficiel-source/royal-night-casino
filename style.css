@@ -86,6 +86,70 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .nav-link{padding:.5rem .9rem;border-radius:8px;color:var(--txt-dim);font-size:.85rem;letter-spacing:.04em;
   transition:color .25s,background .25s}
 .nav-link:hover{color:var(--gold-2);background:var(--glass)}
+.nav-link.locked{opacity:.5}
+.nav-link.locked::after{content:' 🔒';font-size:.72em}
+
+/* ═══════════ RÉSEAU SOCIAL (style Instagram) ═══════════ */
+.social-app{max-width:520px;margin:0 auto}
+.social-top{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.4rem 0 1rem}
+.social-brand{font-family:var(--font-display);font-size:1.4rem;letter-spacing:.02em;
+  background:linear-gradient(120deg,#f4dfa0,#e0722a,#c0328a,#6a4bd0);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60vw}
+.social-newbtn{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#e0722a,#c0328a);color:#fff;border:none;font-size:1.5rem;cursor:pointer;line-height:1}
+.social-newbtn:hover{transform:scale(1.08)}
+.social-profile{display:flex;gap:1rem;align-items:center;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:1rem;margin-bottom:1rem}
+.social-avatar{width:72px;height:72px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;font-size:2rem;
+  background:linear-gradient(135deg,#f4dfa0,#e0722a);border:3px solid #c0328a}
+.social-pinfo{min-width:0;flex:1}
+.social-pname{font-family:var(--font-display);color:var(--gold-2);font-size:1.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.social-pstats{display:flex;gap:1rem;flex-wrap:wrap;margin:.4rem 0;color:var(--txt-dim);font-size:.85rem}
+.social-pstats b{color:var(--gold-2);font-variant-numeric:tabular-nums}
+.social-repbar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:.2rem}
+.social-repbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#e0722a,#c0328a);transition:width .5s}
+.social-repnote{font-size:.74rem;color:var(--txt-dim);margin-top:.25rem;font-variant-numeric:tabular-nums}
+.social-postbar{display:flex;align-items:center;gap:.8rem;margin-bottom:1rem;flex-wrap:wrap}
+.social-postbar .btn-primary{padding:.6rem 1.1rem}
+.social-cooldown{color:var(--gold);font-size:.82rem;font-variant-numeric:tabular-nums}
+.social-feed{display:flex;flex-direction:column;gap:1.2rem}
+.social-feed-end{text-align:center;color:var(--txt-dim);padding:1.4rem;font-style:italic;font-family:var(--font-serif)}
+/* Carte de post */
+.post-card{background:var(--glass);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.post-card-head{display:flex;align-items:center;gap:.6rem;padding:.7rem .9rem}
+.post-ava{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:1rem;background:linear-gradient(135deg,#6a4bd0,#c0328a);flex:0 0 auto}
+.post-user{font-weight:600;color:var(--gold-2);font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post-user small{color:var(--txt-dim);font-weight:400}
+.post-media{position:relative;aspect-ratio:1/1;display:grid;place-items:center;font-size:5rem;overflow:hidden}
+.post-media .pm-emoji{filter:drop-shadow(0 6px 16px rgba(0,0,0,.4));z-index:1}
+.post-media.reel::after{content:'▶ REEL';position:absolute;top:8px;right:8px;background:rgba(0,0,0,.55);color:#fff;font-size:.66rem;font-weight:700;padding:.15rem .45rem;border-radius:6px;letter-spacing:.05em;z-index:2}
+.post-media.reel{animation:reelShift 6s ease-in-out infinite alternate}
+@keyframes reelShift{from{background-position:0% 50%}to{background-position:100% 50%}}
+.post-media .pm-float{position:absolute;font-size:2rem;opacity:.9;animation:pmFloat 3.5s ease-in-out infinite}
+@keyframes pmFloat{0%,100%{transform:translateY(8px)}50%{transform:translateY(-8px)}}
+.post-actions{display:flex;gap:1rem;padding:.6rem .9rem .2rem;font-size:1.2rem}
+.post-actions button{background:none;border:none;cursor:pointer;font-size:1.2rem;transition:transform .12s}
+.post-actions button:active{transform:scale(.8)}
+.post-actions .liked{filter:none}
+.post-likes{padding:0 .9rem;color:var(--gold-2);font-weight:600;font-size:.85rem;font-variant-numeric:tabular-nums}
+.post-caption-txt{padding:.3rem .9rem;color:var(--txt);font-size:.9rem;line-height:1.4}
+.post-caption-txt b{color:var(--gold-2)}
+.post-comments{padding:.2rem .9rem .9rem;display:flex;flex-direction:column;gap:.2rem}
+.post-comment{font-size:.82rem;color:var(--txt-dim)}
+.post-comment b{color:var(--gold-2);font-weight:600}
+/* Modal de post */
+.post-modal{position:fixed;inset:0;z-index:220;display:grid;place-items:center;padding:1.2rem;background:rgba(5,5,8,.75);backdrop-filter:blur(6px)}
+.post-modal.hidden{display:none}
+.post-box{width:min(440px,94vw);max-height:92vh;overflow-y:auto;background:linear-gradient(180deg,#191712,#0e0d0b);border:1px solid var(--gold-deep);border-radius:18px;padding:1rem}
+.post-head{display:flex;align-items:center;gap:.6rem;margin-bottom:.7rem}
+.post-head-lab{font-size:.72rem;color:var(--txt-dim);text-transform:lowercase}
+.post-head-brand{font-family:var(--font-display);color:var(--gold-2);font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.post-close{width:30px;height:30px;border-radius:50%;background:var(--glass);border:1px solid var(--line);color:var(--txt-dim);cursor:pointer}
+.post-preview{aspect-ratio:1/1;border-radius:12px;display:grid;place-items:center;font-size:5rem;position:relative;overflow:hidden;margin-bottom:.7rem}
+.post-typerow{display:flex;gap:.4rem;margin-bottom:.6rem}
+.post-type{flex:1;background:#0d0d10;border:1px solid var(--line);border-radius:9px;padding:.5rem;color:var(--txt-dim);cursor:pointer;font-size:.85rem}
+.post-type.active{border-color:var(--gold);color:var(--gold-2);background:rgba(217,180,91,.1)}
+.post-shuffle{flex:0 0 auto;background:#0d0d10;border:1px solid var(--line);border-radius:9px;padding:.5rem .7rem;cursor:pointer;font-size:1rem}
+.post-caption{width:100%;box-sizing:border-box;background:#0a0a0d;border:1px solid var(--line);border-radius:10px;color:var(--gold-2);padding:.6rem;font-family:var(--font-ui);font-size:.95rem;resize:vertical;min-height:60px;margin-bottom:.7rem;outline:none}
+.post-caption:focus-visible{border-color:var(--gold);box-shadow:0 0 0 3px rgba(217,180,91,.2)}
 .nav-right{display:flex;align-items:center;gap:.6rem}
 .balance-pill{display:flex;align-items:center;gap:.45rem;padding:.42rem .85rem;border-radius:999px;
   background:linear-gradient(180deg,#1c1a15,#111);border:1px solid var(--line);

@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '79';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '83';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -407,12 +407,16 @@ const Bank = (() => {
   const START = 500;
   const MAX_LEVEL = 50;   // niveau où le changement d'emploi se débloque (plus un plafond)
   // Niveau requis pour débloquer chaque jeu (identique dans les deux emplois).
-  const GAME_UNLOCK = { slot: 1, blackjack: 20, poker: 35, dice: 50 };
+  // Tous les jeux du casino sont accessibles dès le début (niveau 1).
+  const GAME_UNLOCK = { slot: 1, blackjack: 1, poker: 1, dice: 1 };
+  const IE_UNLOCK_CASH = 10000;   // il faut avoir atteint 10 000 $ pour débloquer l'Import/Export
 
   const freshMode = () => ({
     balance: START, history: [], stats: { games: 0, wins: 0, biggest: 0 },
     level: 1, xp: 0, org: null, inventory: {}, shipments: [],
-    employees: {}, autoOn: true,   // employés embauchés {role: niveau} + interrupteur
+    employees: {}, autoOn: true,
+    ieUnlocked: false,             // Import/Export débloqué une fois 10 000 $ atteints
+    repXp: 0, repLevel: 1, followers: 0, posts: [], postTimes: [],   // réseau social
   });
   // Deux « emplois » = deux sauvegardes indépendantes.
   const state = { mode: 'commerce', immoUnlocked: false, lastWheel: 0, commerce: freshMode(), immobilier: freshMode() };
@@ -438,6 +442,12 @@ const Bank = (() => {
     if (Array.isArray(m.shipments)) f.shipments = m.shipments;
     if (m.employees && typeof m.employees === 'object') f.employees = m.employees;
     f.autoOn = m.autoOn !== false;
+    f.ieUnlocked = !!m.ieUnlocked || f.balance >= IE_UNLOCK_CASH;
+    if (Number.isFinite(m.repXp) && m.repXp >= 0) f.repXp = m.repXp;
+    if (Number.isFinite(m.repLevel) && m.repLevel >= 1) f.repLevel = m.repLevel;
+    if (Number.isFinite(m.followers) && m.followers >= 0) f.followers = m.followers;
+    if (Array.isArray(m.posts)) f.posts = m.posts.slice(0, 60);
+    if (Array.isArray(m.postTimes)) f.postTimes = m.postTimes.slice(-5);
     return f;
   };
   // Réinitialise l'état en mémoire (avant de charger un emplacement).
@@ -499,6 +509,32 @@ const Bank = (() => {
     isMaxed() { return cur().level >= MAX_LEVEL; },
     isGameUnlocked(g) { return cur().level >= (GAME_UNLOCK[g] || 1); },
     unlockLevel(g) { return GAME_UNLOCK[g] || 1; },
+    // Import/Export : débloqué (définitivement) une fois 10 000 $ atteints.
+    IE_UNLOCK_CASH,
+    get ieUnlocked() { const c = cur(); if (!c.ieUnlocked && c.balance >= IE_UNLOCK_CASH) { c.ieUnlocked = true; save(); } return !!c.ieUnlocked; },
+
+    // ── Réputation / réseau social ────────────────────────────────────────
+    get repLevel() { return cur().repLevel || 1; },
+    get repXp() { return cur().repXp || 0; },
+    repXpNeeded(L) { return Math.round(40 * Math.pow(L || cur().repLevel || 1, 1.7)); },   // de + en + dur
+    get followers() { return cur().followers || 0; },
+    addFollowers(n) { const c = cur(); c.followers = Math.max(0, (c.followers || 0) + Math.round(n)); save(); },
+    addRepXp(n) {
+      n = Math.round(n); if (n <= 0) return { leveled: false, level: cur().repLevel };
+      const c = cur(); c.repXp = (c.repXp || 0) + n; let leveled = false;
+      while (c.repXp >= this.repXpNeeded(c.repLevel)) { c.repXp -= this.repXpNeeded(c.repLevel); c.repLevel++; leveled = true; }
+      save(); return { leveled, level: c.repLevel };
+    },
+    // Plus l'entreprise est connue (réputation), plus les livraisons sont rapides.
+    repDeliveryFactor() { return Math.max(0.35, 1 - (cur().repLevel - 1) * 0.04); },
+    // Posts : 5 toutes les 5 h (heure serveur, anti-triche).
+    get posts() { return cur().posts || (cur().posts = []); },
+    addPost(p) { const c = cur(); (c.posts || (c.posts = [])).unshift(p); if (c.posts.length > 60) c.posts.length = 60; save(); },
+    recentPosts() { const t = TrustedTime.now(); return (cur().postTimes || []).filter((x) => t - x < 5 * 3600000); },
+    postsLeft() { return Math.max(0, 5 - this.recentPosts().length); },
+    canPost() { return this.postsLeft() > 0; },
+    nextPostMs() { const r = this.recentPosts().slice().sort((a, b) => a - b); if (r.length < 5) return 0; return Math.max(0, 5 * 3600000 - (TrustedTime.now() - r[0])); },
+    recordPost() { const c = cur(); c.postTimes = this.recentPosts(); c.postTimes.push(TrustedTime.now()); c.postTimes = c.postTimes.slice(-5); save(); },
 
     onChange(fn) { listeners.push(fn); fn(cur().balance); },
     onXp(fn) { xpListeners.push(fn); fn(cur().level, cur().xp, xpForLevel(cur().level)); },
@@ -766,7 +802,7 @@ const UI = (() => {
 const Nav = (() => {
   const views = {
     home: 'view-home', casino: 'view-casino', profile: 'view-profile', concession: 'view-concession',
-    importexport: 'view-importexport', agence: 'view-agence', ventelocation: 'view-ventelocation',
+    importexport: 'view-importexport', social: 'view-social', agence: 'view-agence', ventelocation: 'view-ventelocation',
     dice: 'view-dice', blackjack: 'view-blackjack', poker: 'view-poker', slot: 'view-slot',
   };
   let current = 'home';
@@ -1944,18 +1980,18 @@ const Concession = (() => {
 
   // Achat immédiat, une unité PAR CLIC (cliquer 4 fois = acheter 4 fois),
   // sans confirmation pour permettre l'achat rapide en quantité.
+  const DELIVERY = 60000;   // 1 min de livraison au garage après achat
+
   const buy = (name, price) => {
     const transport = shipForBuy(price);
     const total = price + transport;
     if (Bank.balance < total) { Sound.play('lose'); UI.toast(`Solde insuffisant (${fmt(total)} € avec transport).`, 'lose'); return; }
     if (!Bank.debit(total)) { UI.toast('Achat impossible.', 'lose'); return; }
-    const k = keyOf(currentCat, name);
-    if (Bank.inventory[k]) Bank.inventory[k].qty += 1;
-    else Bank.inventory[k] = { cat: currentCat, name, price, qty: 1 };
     Bank.logTx(-total, `Achat ${name}`);
+    Bank.shipments.push({ id: Date.now() + Math.random(), type: 'import', cat: currentCat, name, price, qty: 1, partner: currentCountry, arriveAt: TrustedTime.now() + DELIVERY, dur: DELIVERY, value: 0 });
     Bank.persist();
     Sound.play('chip');
-    UI.toast(`✅ ${name} acheté · ${Bank.inventory[k].qty} au garage`, 'win');
+    UI.toast(`🚚 ${name} commandé — livraison au garage dans 1 min.`, 'win');
     render();
   };
 
@@ -1966,13 +2002,11 @@ const Concession = (() => {
     if (n <= 0) { Sound.play('lose'); UI.toast(`Solde insuffisant (${fmt(unit)} € l'unité avec transport).`, 'lose'); return; }
     const totalCost = unit * n;
     if (!Bank.debit(totalCost)) { UI.toast('Achat impossible.', 'lose'); return; }
-    const k = keyOf(currentCat, name);
-    if (Bank.inventory[k]) Bank.inventory[k].qty += n;
-    else Bank.inventory[k] = { cat: currentCat, name, price, qty: n };
     Bank.logTx(-totalCost, `Achat ${name} ×${n}`);
+    Bank.shipments.push({ id: Date.now() + Math.random(), type: 'import', cat: currentCat, name, price, qty: n, partner: currentCountry, arriveAt: TrustedTime.now() + DELIVERY, dur: DELIVERY, value: 0 });
     Bank.persist();
-    Sound.play('jackpot'); UI.coinRain(Math.min(20, n));
-    UI.toast(`✅ ${n}× ${name} achetés (−${fmt(totalCost)} €) · ${Bank.inventory[k].qty} au garage`, 'win');
+    Sound.play('chip');
+    UI.toast(`🚚 ${n}× ${name} commandés (−${fmt(totalCost)} €) — livraison dans 1 min.`, 'win');
     render();
   };
 
@@ -2000,19 +2034,28 @@ const ImportExport = (() => {
     ['bateau', 'Bateaux', '⛵'], ['avion', 'Avions', '✈️'],
   ];
   const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
-  const TAX = 0.05;  // droits de douane à l'export (réduits)
+  const TAX = 0.12;  // droits de douane à l'export (relevés → marges plus dures)
   // ── Demande ALÉATOIRE par pays × véhicule, qui change toutes les 5 min ────
   // Stable pendant 5 min (fini le prix qui bouge à chaque clic) puis re-tirée.
   const EPOCH_MS = 5 * 60 * 1000;
   // Fenêtre de demande basée sur l'HEURE SERVEUR (TrustedTime) → le marché mondial
   // est IDENTIQUE pour tous les joueurs connectés, partout, en même temps.
   const demandEpoch = () => Math.floor(TrustedTime.now() / EPOCH_MS);
-  // 0,70 – 1,65 : certains véhicules sont bien plus demandés dans certains pays.
-  const demandFactor = (country, name) => 0.70 + (hash(country + '»' + name + '#' + demandEpoch()) % 96) / 100;
+  // 0,58 – 1,20 : marché DUR — peu de marchés sont vraiment rentables, il faut chercher.
+  const demandFactor = (country, name) => 0.58 + (hash(country + '»' + name + '#' + demandEpoch()) % 63) / 100;
   // Niveau de demande lisible (pour l'affichage) : 1 (faible) … 5 (brûlante).
   const demandLevel = (country, name) => {
     const f = demandFactor(country, name);
-    return f >= 1.45 ? 5 : f >= 1.25 ? 4 : f >= 1.05 ? 3 : f >= 0.88 ? 2 : 1;
+    return f >= 1.12 ? 5 : f >= 1.02 ? 4 : f >= 0.92 ? 3 : f >= 0.78 ? 2 : 1;
+  };
+  // Délai de livraison selon le PRIX (réduit par la réputation de l'entreprise).
+  const delayForPrice = (price) => {
+    let base;
+    if (price < 10000) base = 2 * 60000;          // 2 min
+    else if (price < 100000) base = 10 * 60000;   // 10 min
+    else if (price < 1000000) base = 15 * 60000;  // 15 min
+    else base = 60 * 60000;                        // 1 h (gros véhicules : avions, yachts…)
+    return Math.round(base * (Bank.repDeliveryFactor ? Bank.repDeliveryFactor() : 1));
   };
   // Temps restant (ms) avant le prochain tirage de la demande (heure serveur).
   const demandResetIn = () => EPOCH_MS - (TrustedTime.now() % EPOCH_MS);
@@ -2214,10 +2257,11 @@ const ImportExport = (() => {
     if (Bank.balance < total) { Sound.play('lose'); UI.toast(`Solde insuffisant (${fmt(total)} € requis).`, 'lose'); return; }
     Bank.debit(total);
     Bank.logTx(-total, `Import ${name}`);
-    Bank.shipments.push({ id: Date.now() + Math.random(), type: 'import', cat, name, price, qty, partner, arriveAt: Date.now() + delayMs, value: 0 });
+    const dImp = delayForPrice(price);
+    Bank.shipments.push({ id: Date.now() + Math.random(), type: 'import', cat, name, price, qty, partner, arriveAt: TrustedTime.now() + dImp, dur: dImp, value: 0 });
     Bank.persist();
     Sound.play('chip'); UI.coinRain(6);
-    UI.toast(`📦 ${qty}× ${name} en route depuis ${partner} !`, 'win');
+    UI.toast(`📦 ${qty}× ${name} en route depuis ${partner} (${Math.round(dImp / 60000)} min) !`, 'win');
     renderShipments(); renderWarehouse();
   };
 
@@ -2238,10 +2282,11 @@ const ImportExport = (() => {
       if (!ok) return;
       Bank.debit(shipping);
       item.qty -= qty; if (item.qty <= 0) delete Bank.inventory[k];
-      Bank.shipments.push({ id: Date.now() + Math.random(), type: 'export', cat, name, qty, partner, arriveAt: Date.now() + delayMs, value: revenue });
+      const dExp = delayForPrice(item.price);
+      Bank.shipments.push({ id: Date.now() + Math.random(), type: 'export', cat, name, qty, partner, arriveAt: TrustedTime.now() + dExp, dur: dExp, value: revenue });
       Bank.persist();
       Sound.play('chip');
-      UI.toast(`🚢 ${qty}× ${name} → ${partner} — paiement à l'arrivée.`, profit >= 0 ? 'win' : 'lose');
+      UI.toast(`🚢 ${qty}× ${name} → ${partner} — paiement dans ${Math.round(dExp / 60000)} min.`, profit >= 0 ? 'win' : 'lose');
       renderShipments(); renderWarehouse(); renderGoods(); renderMarkets();
     });
   };
@@ -2261,7 +2306,7 @@ const ImportExport = (() => {
     }
     const ships = Bank.shipments;
     if (!ships || !ships.length) return;
-    const now = Date.now();
+    const now = TrustedTime.now();
     let changed = false;
     for (let i = ships.length - 1; i >= 0; i--) {
       if (now >= ships[i].arriveAt) {
@@ -2305,27 +2350,23 @@ const ImportExport = (() => {
     if (!els.shipments) return;
     const ships = Bank.shipments || [];
     if (!ships.length) { els.shipments.innerHTML = '<p class="ie-hint">Aucune expédition en cours.</p>'; return; }
-    const now = Date.now();
+    const now = TrustedTime.now();
+    const fmtETA = (ms) => { const s = Math.ceil(ms / 1000); if (s < 60) return s + ' s'; const m = Math.floor(s / 60); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min ' + (s % 60) + ' s'; };
     els.shipments.innerHTML = ships.slice().sort((a, b) => a.arriveAt - b.arriveAt).map((s) => {
       const left = Math.max(0, s.arriveAt - now);
-      const totalDur = delayMsFor(s);
+      const totalDur = s.dur || delayMsFor(s);
       const pct = clamp(100 - Math.round((left / totalDur) * 100), 0, 100);
-      const secs = Math.ceil(left / 1000);
       const ico = Concession.catMeta[s.cat] ? Concession.catMeta[s.cat].ico : '📦';
       const dir = s.type === 'import' ? `📥 ${s.partner} → vous` : `📤 vous → ${s.partner}`;
       const tag = s.type === 'export' ? ` · +${fmt(s.value)} €` : '';
       return `<div class="ie-ship">
-        <div class="ie-ship-top"><span>${ico} ${s.qty}× ${s.name}</span><span class="ie-ship-eta">${secs} s${tag}</span></div>
+        <div class="ie-ship-top"><span>${ico} ${s.qty}× ${s.name}</span><span class="ie-ship-eta">${fmtETA(left)}${tag}</span></div>
         <div class="ie-ship-route">${dir}</div>
         <div class="ie-ship-bar"><i style="width:${pct}%"></i></div>
       </div>`;
     }).join('');
   };
-  const delayMsFor = (s) => {
-    const meC = CENTROID[originCountry()], pC = CENTROID[s.partner];
-    if (meC && pC) return clamp(6000 + haversine(meC, pC) * 3, 6000, 80000);
-    return 20000;
-  };
+  const delayMsFor = (s) => s.dur || 120000;
 
   const onEnter = () => {
     const me = originCountry();
@@ -3078,6 +3119,189 @@ const Auction = (() => {
 })();
 
 /* ======================================================================
+   11 duodecies. RÉSEAU SOCIAL — façon Instagram : posts, réputation, abonnés
+   ====================================================================== */
+const Social = (() => {
+  const POST_XP = 22;                 // XP de réputation par post
+  const hash = (s) => { let h = 0; for (let i = 0; i < String(s).length; i++) h = (h * 31 + String(s).charCodeAt(i)) >>> 0; return h; };
+  const GRADS = [
+    'linear-gradient(135deg,#ff6a3d,#f9d423)', 'linear-gradient(135deg,#c0328a,#6a4bd0)',
+    'linear-gradient(135deg,#11998e,#38ef7d)', 'linear-gradient(135deg,#2193b0,#6dd5ed)',
+    'linear-gradient(135deg,#f7971e,#ffd200)', 'linear-gradient(135deg,#ee0979,#ff6a00)',
+    'linear-gradient(135deg,#654ea3,#eaafc8)', 'linear-gradient(135deg,#0f2027,#2c5364)',
+    'linear-gradient(135deg,#e53935,#e35d5b)', 'linear-gradient(135deg,#1d976c,#93f9b9)',
+    'linear-gradient(135deg,#fc466b,#3f5efb)', 'linear-gradient(135deg,#f12711,#f5af19)',
+  ];
+  const PHOTO = ['🏎️', '🍕', '🌅', '🐶', '🎸', '🏝️', '⚽', '🎮', '🍔', '🌆', '🐱', '☕', '🏔️', '🎨', '🚀', '💎', '🏆', '🧁', '🌸', '🎧'];
+  const REEL = ['🎮', '🕹️', '👾', '😂', '🤣', '🔥', '⚽', '🏀', '💀', '🎯', '🏆', '🎧', '🛹', '🥁', '🎬'];
+  const ACCOUNTS = [
+    { u: 'gamer_zone', a: '🎮' }, { u: 'memes.daily', a: '😂' }, { u: 'auto_luxe', a: '🏎️' },
+    { u: 'travel.vibes', a: '✈️' }, { u: 'foodie.pics', a: '🍕' }, { u: 'tech.today', a: '💻' },
+    { u: 'fit.life', a: '💪' }, { u: 'street.style', a: '🧢' }, { u: 'moon.invest', a: '🚀' },
+    { u: 'nature.hd', a: '🌄' }, { u: 'esport.pro', a: '🕹️' }, { u: 'lux.watch', a: '⌚' },
+    { u: 'the.chef', a: '👨‍🍳' }, { u: 'urban.beats', a: '🎧' }, { u: 'daily.laugh', a: '🤣' },
+    { u: 'pixel.art', a: '👾' }, { u: 'hoop.dreams', a: '🏀' }, { u: 'sunset.chaser', a: '🌇' },
+  ];
+  const CAPTIONS = [
+    "POV : t'as trouvé le meilleur spot 🔥", "On ne va pas se mentir… 😂", "Le week-end commence 🎉",
+    "Qui d'autre est team pizza 🍕", "Nouveau record battu 🏆", "Vibes du soir ✨",
+    "Impossible d'arrêter de rire 🤣", "Le futur est déjà là 🚀", "Chef-d'œuvre 🎨",
+    "On valide ou pas ? 👇", "Ça c'est du contenu 💯", "Petit moment de détente 😌",
+    "Trop stylé non ? 😍", "Le combo parfait 🤝", "Journée productive 💼",
+  ];
+  const COMMENTS = ['🔥🔥🔥', 'trop bien !', 'je valide 💯', 'haha excellent 😂', 'goals 😍', 'incroyable 👏', 'le meilleur post du jour', 'team ça 🙌', 'wow 🤩', 'énorme 😎', 'ça donne envie !', '+1 💛'];
+
+  let feedEl, moreEl, offset = 0, timer = null, draft = { type: 'photo', scene: '🏎️', grad: GRADS[0] };
+
+  const brandName = () => (Bank.company && Bank.company.name) || 'Mon entreprise';
+  const handleFor = (n) => '@' + String(n || 'entreprise').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 20);
+
+  // Post généré (déterministe) pour remplir le fil à l'infini.
+  const fillerPost = (i) => {
+    const h = hash('post#' + i);
+    const acc = ACCOUNTS[h % ACCOUNTS.length];
+    const type = ((h >>> 3) % 3 === 0) ? 'reel' : 'photo';
+    const pool = type === 'reel' ? REEL : PHOTO;
+    const scene = pool[(h >>> 5) % pool.length];
+    const grad = GRADS[(h >>> 7) % GRADS.length];
+    const caption = CAPTIONS[(h >>> 9) % CAPTIONS.length];
+    const likes = 40 + (h % 24000);
+    const nc = 1 + ((h >>> 11) % 2);
+    const comments = [];
+    for (let k = 0; k < nc; k++) { const ca = ACCOUNTS[(h >>> (13 + k * 2)) % ACCOUNTS.length]; comments.push({ u: ca.u, t: COMMENTS[(h >>> (12 + k * 3)) % COMMENTS.length] }); }
+    return { user: acc.u, ava: acc.a, type, scene, grad, caption, likes, comments };
+  };
+
+  const floaters = (scene) => `<span class="pm-emoji">${scene}</span>` +
+    `<span class="pm-float" style="left:12%;top:18%;animation-delay:.2s">${scene}</span>` +
+    `<span class="pm-float" style="right:14%;bottom:16%;animation-delay:1.1s">${scene}</span>`;
+
+  const cardHTML = (p, id) => `
+    <article class="post-card" data-pid="${id}">
+      <div class="post-card-head">
+        <div class="post-ava" style="${p.own ? 'background:linear-gradient(135deg,#f4dfa0,#e0722a);color:#3a2708;font-weight:800' : ''}">${p.own ? (brandName().trim()[0] || '🏢').toUpperCase() : p.ava}</div>
+        <div class="post-user">${p.own ? brandName() : p.user}<br><small>${p.own ? handleFor(brandName()) : '@' + p.user}</small></div>
+      </div>
+      <div class="post-media ${p.type === 'reel' ? 'reel' : ''}" style="background:${p.grad};background-size:180% 180%">${floaters(p.scene)}</div>
+      <div class="post-actions"><button data-like>🤍</button><button data-cmt>💬</button><button>📤</button></div>
+      <div class="post-likes"><b class="pl-count">${fmt(p.likes)}</b> j'aime</div>
+      <div class="post-caption-txt"><b>${p.own ? handleFor(brandName()) : '@' + p.user}</b> ${(p.caption || '').replace(/</g, '&lt;')}</div>
+      <div class="post-comments">${(p.comments || []).map((c) => `<div class="post-comment"><b>@${c.u}</b> ${c.t}</div>`).join('')}</div>
+    </article>`;
+
+  const renderProfile = () => {
+    $('#socialBrand').textContent = brandName();
+    $('#postBrand').textContent = brandName();
+    $('#socialPName').textContent = brandName();
+    $('#socialAvatar').textContent = (brandName().trim()[0] || '🏢').toUpperCase();
+    $('#socialPosts').textContent = fmt((Bank.posts || []).length);
+    $('#socialFollowers').textContent = fmt(Bank.followers);
+    $('#socialRepLevel').textContent = 'Niv. ' + Bank.repLevel;
+    const need = Bank.repXpNeeded(Bank.repLevel);
+    $('#socialRepFill').style.width = clamp(Math.round(Bank.repXp / need * 100), 0, 100) + '%';
+    $('#socialRepNote').textContent = `Réputation niv. ${Bank.repLevel} · ${fmt(Bank.repXp)} / ${fmt(need)} XP · livraisons −${Math.round((1 - Bank.repDeliveryFactor()) * 100)}%`;
+  };
+
+  const updateCooldown = () => {
+    const el = $('#socialCooldown'); const cta = $('#socialPostCta'); if (!el) return;
+    const left = Bank.postsLeft();
+    if (left > 0) { el.textContent = `${left} post${left > 1 ? 's' : ''} dispo (5 / 5 h)`; if (cta) cta.disabled = false; }
+    else {
+      const ms = Bank.nextPostMs(); const m = Math.floor(ms / 60000), s = Math.ceil((ms % 60000) / 1000);
+      el.textContent = `⏳ Prochain post dans ${m}:${String(s).padStart(2, '0')}`; if (cta) cta.disabled = true;
+    }
+  };
+
+  const appendFiller = (n) => {
+    let html = '';
+    for (let k = 0; k < n; k++) html += cardHTML(fillerPost(offset), 'f' + offset), offset++;
+    feedEl.insertAdjacentHTML('beforeend', html);
+  };
+
+  const rebuildFeed = () => {
+    offset = 0;
+    const own = (Bank.posts || []).map((p, i) => cardHTML({ ...p, own: true }, 'u' + i)).join('');
+    feedEl.innerHTML = own;
+    appendFiller(10);
+  };
+
+  const onScroll = () => {
+    if (Nav.current !== 'social' || !moreEl) return;
+    const r = moreEl.getBoundingClientRect();
+    if (r.top < window.innerHeight + 400) appendFiller(6);
+  };
+
+  // ── Création de post ──────────────────────────────────────────────────
+  const newDraftVisual = () => {
+    const pool = draft.type === 'reel' ? REEL : PHOTO;
+    draft.scene = pool[Math.floor(Math.random() * pool.length)];
+    draft.grad = GRADS[Math.floor(Math.random() * GRADS.length)];
+    renderPreview();
+  };
+  const renderPreview = () => {
+    const el = $('#postPreview'); if (!el) return;
+    el.className = 'post-preview ' + (draft.type === 'reel' ? 'reel' : '');
+    el.style.background = draft.grad; el.style.backgroundSize = '180% 180%';
+    el.innerHTML = floaters(draft.scene);
+  };
+  const openPost = () => {
+    if (!Bank.canPost()) { updateCooldown(); UI.toast('⏳ Vous avez épuisé vos 5 posts. Revenez plus tard.', 'lose'); return; }
+    draft.type = 'photo'; $$('.post-type').forEach((b) => b.classList.toggle('active', b.dataset.ptype === 'photo'));
+    $('#postCaption').value = ''; newDraftVisual();
+    $('#postModal').classList.remove('hidden'); Sound.play('select');
+  };
+  const closePost = () => { $('#postModal').classList.add('hidden'); Sound.play('click'); };
+
+  const publish = () => {
+    if (!Bank.canPost()) { closePost(); updateCooldown(); UI.toast('⏳ Plus de post disponible pour l\'instant.', 'lose'); return; }
+    const caption = ($('#postCaption').value || '').trim() || 'Nouveau chez ' + brandName() + ' ! 🚀';
+    // Quelques abonnés et likes selon la réputation.
+    const gainedFollowers = 2 + Math.floor(Math.random() * (4 + Bank.repLevel * 2));
+    const baseLikes = 5 + Math.floor(Math.random() * (8 + Bank.followers * 0.05 + Bank.repLevel * 3));
+    const comments = [];
+    const nc = 1 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < nc; k++) { const ca = ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)]; comments.push({ u: ca.u, t: COMMENTS[Math.floor(Math.random() * COMMENTS.length)] }); }
+    Bank.addPost({ type: draft.type, scene: draft.scene, grad: draft.grad, caption, likes: baseLikes, comments, ts: TrustedTime.now() });
+    Bank.recordPost();
+    Bank.addFollowers(gainedFollowers);
+    const rep = Bank.addRepXp(POST_XP);
+    closePost();
+    Sound.play('win'); UI.coinRain(6);
+    UI.toast(`📢 Publié ! +${POST_XP} réputation, +${gainedFollowers} abonnés${rep.leveled ? ` · 🏅 Réputation niveau ${rep.level} !` : ''}`, 'win');
+    renderProfile(); updateCooldown(); rebuildFeed();
+  };
+
+  const onEnter = () => {
+    renderProfile(); updateCooldown(); rebuildFeed();
+    clearInterval(timer); timer = setInterval(() => { if (Nav.current === 'social') updateCooldown(); }, 1000);
+  };
+
+  const init = () => {
+    feedEl = $('#socialFeed'); moreEl = $('#socialFeedMore');
+    $('#socialNewBtn').addEventListener('click', openPost);
+    $('#socialPostCta').addEventListener('click', openPost);
+    $('#postClose').addEventListener('click', closePost);
+    $('#postModal').addEventListener('click', (e) => { if (e.target.id === 'postModal') closePost(); });
+    $('#postPublish').addEventListener('click', publish);
+    $('#postShuffle').addEventListener('click', () => { newDraftVisual(); Sound.play('click'); });
+    $$('.post-type').forEach((b) => b.addEventListener('click', () => {
+      $$('.post-type').forEach((x) => x.classList.remove('active')); b.classList.add('active');
+      draft.type = b.dataset.ptype; newDraftVisual();
+    }));
+    // Like / commenter un post du fil (visuel).
+    feedEl.addEventListener('click', (e) => {
+      const like = e.target.closest('[data-like]');
+      if (like) { const card = like.closest('.post-card'); const c = card.querySelector('.pl-count'); const liked = like.textContent === '❤️'; like.textContent = liked ? '🤍' : '❤️'; c.textContent = fmt((parseInt(c.textContent.replace(/\D/g, '')) || 0) + (liked ? -1 : 1)); Sound.play('chip'); return; }
+      const cmt = e.target.closest('[data-cmt]');
+      if (cmt) { const card = cmt.closest('.post-card'); const box = card.querySelector('.post-comments'); const ca = ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)]; box.insertAdjacentHTML('beforeend', `<div class="post-comment"><b>@${ca.u}</b> ${COMMENTS[Math.floor(Math.random() * COMMENTS.length)]}</div>`); Sound.play('select'); }
+    });
+    window.addEventListener('scroll', onScroll, { passive: true });
+  };
+
+  return { init, onEnter };
+})();
+
+/* ======================================================================
    11 nonies. MULTIJOUEUR EN LIGNE — 2 joueurs via serveur WebSocket
    ====================================================================== */
 const Multiplayer = (() => {
@@ -3681,6 +3905,13 @@ const SlotSelect = (() => {
 
   // Solde partout + historique
   Bank.onChange((bal) => UI.syncBalance(bal));
+  // Déblocage de l'Import/Export à 10 000 $ (annonce unique + cadenas visuel).
+  let ieAnnounced = Bank.ieUnlocked;
+  Bank.onChange(() => {
+    if (!ieAnnounced && Bank.ieUnlocked) { ieAnnounced = true; UI.toast('🔓 Import / Export débloqué ! Le négoce mondial vous est ouvert.', 'win'); Sound.play('jackpot'); UI.coinRain(16); }
+    const ieLink = document.querySelector('.nav-link[data-nav="importexport"]');
+    if (ieLink) { ieLink.classList.toggle('locked', !Bank.ieUnlocked); ieLink.title = Bank.ieUnlocked ? '' : `🔒 Débloqué à ${fmt(Bank.IE_UNLOCK_CASH)} $`; }
+  });
   // Niveau + expérience
   Bank.onXp((level, xp, need) => UI.syncLevel(level, xp, need));
   Bank.onLevelUp((level) => UI.levelUp(level));
@@ -3693,9 +3924,10 @@ const SlotSelect = (() => {
   Slot.init();
   Concession.init();
   ImportExport.init();
-  Automation.init();
+  // Automatisation RETIRÉE : le jeu se joue à la main pour progresser.
   DailyWheel.init();
   Auction.init();
+  Social.init();
   TrustedTime.sync();                          // heure serveur (anti-triche roue)
   setInterval(() => TrustedTime.sync(), 300000); // re-synchro toutes les 5 min
   AgenceImmo.init();
@@ -3726,7 +3958,7 @@ const SlotSelect = (() => {
   Nav.register('dice', DiceGame.onEnter);
   Nav.register('poker', Poker.onEnter);
   Nav.register('slot', Slot.onEnter);
-  Nav.register('profile', () => { UI.renderHistory(); UI.renderGarage(); Automation.render(); });
+  Nav.register('profile', () => { UI.renderHistory(); UI.renderGarage(); const ac = document.getElementById('autoCard'); if (ac) ac.style.display = 'none'; });
   Nav.register('casino', () => { DailyWheel.onEnterCasino(); Auction.refreshBadge(); });
 
   // Recharge de secours (filet anti-faillite)
@@ -3737,6 +3969,7 @@ const SlotSelect = (() => {
   });
   Nav.register('concession', Concession.onEnter);
   Nav.register('importexport', ImportExport.onEnter);
+  Nav.register('social', Social.onEnter);
   Nav.register('agence', AgenceImmo.onEnter);
   Nav.register('ventelocation', VenteLocation.onEnter);
   Nav.register('casino', UI.renderCasino);
@@ -3751,7 +3984,15 @@ const SlotSelect = (() => {
     if (vehicle) { Concession.select(vehicle.dataset.vehicle); }
     else if (estate) { AgenceImmo.select(estate.dataset.estate); }
     else if (deal) { VenteLocation.select(deal.dataset.deal); }
-    else if (nav) { Nav.go(nav.dataset.nav); }
+    else if (nav) {
+      // Import/Export verrouillé tant que 10 000 $ ne sont pas atteints.
+      if (nav.dataset.nav === 'importexport' && !Bank.ieUnlocked) {
+        Sound.play('lose');
+        UI.toast(`🔒 Import/Export se débloque à ${fmt(Bank.IE_UNLOCK_CASH)} $. Encore ${fmt(Math.max(0, Bank.IE_UNLOCK_CASH - Bank.balance))} $ à gagner (casino, concession…).`, 'lose');
+        return;
+      }
+      Nav.go(nav.dataset.nav);
+    }
     else if (game) {
       const g = game.dataset.game;
       if (!Bank.isGameUnlocked(g)) { Sound.play('lose'); UI.toast(`🔒 ${gameLabel(g)} se débloque au niveau ${Bank.unlockLevel(g)}.`, 'lose'); return; }
