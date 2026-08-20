@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '68';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '69';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2897,6 +2897,101 @@ const DailyWheel = (() => {
 })();
 
 /* ======================================================================
+   11 undecies. ENCHÈRES MONDIALES — un lot rare toutes les 3 h (horloge réelle)
+   ====================================================================== */
+const Auction = (() => {
+  const PERIOD = 3 * 60 * 60 * 1000;   // 3 heures
+  const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
+  // Lots rares (valeur de marché) — payés avec une décote, revendables à leur pleine valeur.
+  const LOTS = [
+    { cat: 'voiture', name: 'Ferrari 250 GTO', v: 900000 },
+    { cat: 'voiture', name: 'Bugatti Chiron Super Sport', v: 1200000 },
+    { cat: 'voiture', name: 'Pagani Zonda HP Barchetta', v: 1500000 },
+    { cat: 'voiture', name: 'Rolls-Royce Boat Tail', v: 2500000 },
+    { cat: 'voiture', name: 'Aston Martin Valkyrie', v: 1800000 },
+    { cat: 'bateau', name: 'Yacht Riva Superblue', v: 2000000 },
+    { cat: 'bateau', name: "Voilier de course America's Cup", v: 800000 },
+    { cat: 'avion', name: 'Jet privé Gulfstream G700', v: 3000000 },
+    { cat: 'avion', name: 'Hélicoptère Airbus H160', v: 1400000 },
+    { cat: 'velo', name: 'Vélo en or 24 carats', v: 250000 },
+  ];
+  const KEY = 'rnc_auctionWin';        // dernière fenêtre où on a acheté
+  const windowId = () => Math.floor(Date.now() / PERIOD);
+  const timeLeft = () => PERIOD - (Date.now() % PERIOD);
+  // Lot + décote déterministes pour la fenêtre courante (identiques pour tous).
+  const currentLot = () => {
+    const w = windowId(), h = hash('lot#' + w);
+    const lot = LOTS[h % LOTS.length];
+    const disc = 0.25 + (hash('disc#' + w) % 31) / 100;   // 25 % – 55 % de remise
+    const price = Math.max(1, Math.round(lot.v * (1 - disc)));
+    return { ...lot, disc, price };
+  };
+  const boughtThisWindow = () => Number(localStorage.getItem(KEY) || -1) === windowId();
+
+  let els = {}, timer = null;
+  const fmtDur = (ms) => { const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60; return `${h}h ${String(m).padStart(2, '0')}m ${String(ss).padStart(2, '0')}s`; };
+
+  const init = () => {
+    els = {
+      modal: $('#auction'), img: $('#auctionImg'), name: $('#auctionName'),
+      value: $('#auctionValue'), price: $('#auctionPrice'), timer: $('#auctionTimer'),
+      result: $('#auctionResult'), buy: $('#auctionBuy'), badge: $('#auctionBadge'),
+    };
+    $('#auctionBtn').addEventListener('click', open);
+    $('#auctionClose').addEventListener('click', close);
+    els.buy.addEventListener('click', buy);
+    setInterval(refreshBadge, 1000);
+    refreshBadge();
+  };
+
+  const refreshBadge = () => {
+    if (!els.badge) return;
+    els.badge.textContent = boughtThisWindow() ? '' : '● NOUVEAU';
+    els.badge.classList.toggle('ready', !boughtThisWindow());
+  };
+
+  const render = () => {
+    const lot = currentLot();
+    els.img.innerHTML = (window.Concession && Concession.svg) ? Concession.svg(lot.cat, lot.name) : '🏆';
+    els.name.textContent = lot.name;
+    els.value.textContent = 'Valeur : ' + fmt(lot.v) + ' €';
+    els.price.textContent = '🔨 ' + fmt(lot.price) + ' €  (−' + Math.round(lot.disc * 100) + ' %)';
+    els.timer.textContent = '⏳ Nouveau lot dans ' + fmtDur(timeLeft());
+    const done = boughtThisWindow();
+    els.buy.disabled = done;
+    els.buy.textContent = done ? '✔ Déjà acquis ce tour' : 'Enchérir — ' + fmt(lot.price) + ' €';
+    els.result.textContent = done ? 'Revenez au prochain tour pour un nouveau lot rare.' : '';
+    els.result.className = 'wheel-result';
+  };
+
+  const open = () => {
+    render();
+    els.modal.classList.remove('hidden');
+    Sound.play('select');
+    clearInterval(timer);
+    timer = setInterval(() => { if (!els.modal.classList.contains('hidden')) render(); }, 1000);
+  };
+  const close = () => { els.modal.classList.add('hidden'); clearInterval(timer); Sound.play('click'); };
+
+  const buy = () => {
+    if (boughtThisWindow()) return;
+    const lot = currentLot();
+    if (Bank.balance < lot.price) { Sound.play('lose'); UI.toast(`Solde insuffisant — enchère à ${fmt(lot.price)} €.`, 'lose'); return; }
+    Bank.debit(lot.price); Bank.logTx && Bank.logTx(-lot.price, 'Enchère : ' + lot.name);
+    // Le lot entre au garage à sa PLEINE valeur → revente très avantageuse.
+    const k = lot.cat + '|' + lot.name, inv = Bank.inventory;
+    if (inv[k]) inv[k].qty += 1; else inv[k] = { cat: lot.cat, name: lot.name, price: lot.v, qty: 1 };
+    localStorage.setItem(KEY, String(windowId()));
+    Bank.persist();
+    Sound.play('jackpot'); UI.coinRain(20);
+    UI.toast(`🏆 Lot rare remporté : ${lot.name} ! Revendez-le à l'Import/Export.`, 'win');
+    render(); refreshBadge();
+  };
+
+  return { init, refreshBadge };
+})();
+
+/* ======================================================================
    11 nonies. MULTIJOUEUR EN LIGNE — 2 joueurs via serveur WebSocket
    ====================================================================== */
 const Multiplayer = (() => {
@@ -2988,6 +3083,7 @@ const Multiplayer = (() => {
     const dDep = $('#duoDepositBtn'); if (dDep) dDep.addEventListener('click', () => { const el = $('#duoDepositInput'); depositToVault(el.value); el.value = ''; });
     const gM = $('#duoGiftMoneyBtn'); if (gM) gM.addEventListener('click', () => { const el = $('#duoGiftMoney'); sendMoney(el.value); el.value = ''; });
     const gV = $('#duoGiftVehicleBtn'); if (gV) gV.addEventListener('click', () => { const el = $('#duoGiftVehicle'); if (el && el.value) sendVehicle(el.value); });
+    const em = $('#duoEmotes'); if (em) em.addEventListener('click', (e) => { const b = e.target.closest('[data-emote]'); if (b) sendEmote(b.dataset.emote); });
     // Saisie du code : passage auto d'une case à l'autre.
     const inputs = $$('#mpCodeInput input');
     inputs.forEach((inp, i) => {
@@ -3109,6 +3205,7 @@ const Multiplayer = (() => {
         renderDuoHud(); renderDuoPanel();
       }
       else if (m.kind === 'hello') { syncOut(true); }   // le partenaire demande notre état
+      else if (m.kind === 'emote') { showEmote(m.e); UI.toast(`${peerName || 'Partenaire'} : ${m.e}`); Sound.play('select'); }
       else if (m.kind === 'gift') {                       // cadeau reçu (argent ou véhicule)
         if (m.money) { Bank.credit(m.money); Bank.logTx && Bank.logTx(m.money, 'Cadeau du partenaire'); UI.toast(`🎁 ${peerName || 'Votre partenaire'} vous a envoyé ${fmtMoney(m.money)} !`, 'win'); Sound.play('win'); UI.coinRain(10); }
         if (m.vehicle) { const v = m.vehicle, k = v.cat + '|' + v.name, inv = Bank.inventory; if (inv[k]) inv[k].qty += (v.qty || 1); else inv[k] = { cat: v.cat, name: v.name, price: v.price, qty: (v.qty || 1) }; Bank.persist(); UI.toast(`🚚 ${peerName || 'Votre partenaire'} vous a expédié ${v.qty || 1}× ${v.name} ! Revendez-le où la demande est forte.`, 'win'); Sound.play('win'); UI.coinRain(6); }
@@ -3225,6 +3322,18 @@ const Multiplayer = (() => {
         : '<option value="">Aucun véhicule en stock</option>';
     }
   };
+  // Emotes / pings entre partenaires.
+  const showEmote = (emoji) => {
+    const el = $('#emoteFloat'); if (!el) return;
+    el.textContent = emoji;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  };
+  const sendEmote = (emoji) => {
+    if (!ws || ws.readyState !== 1) { UI.toast('Partenaire hors ligne.', 'lose'); return; }
+    send({ type: 'relay', kind: 'emote', e: emoji });
+    UI.toast(`Vous : ${emoji}`); Sound.play('select');
+  };
+
   const openDuoPanel = () => { if (!active) return; $('#duoPanel').classList.remove('hidden'); renderDuoPanel(); Sound.play('select'); };
   const closeDuoPanel = () => { $('#duoPanel').classList.add('hidden'); Sound.play('click'); };
 
@@ -3369,6 +3478,7 @@ const SlotSelect = (() => {
   ImportExport.init();
   Automation.init();
   DailyWheel.init();
+  Auction.init();
   AgenceImmo.init();
   VenteLocation.init();
   Onboarding.init();
@@ -3398,7 +3508,7 @@ const SlotSelect = (() => {
   Nav.register('poker', Poker.onEnter);
   Nav.register('slot', Slot.onEnter);
   Nav.register('profile', () => { UI.renderHistory(); UI.renderGarage(); Automation.render(); });
-  Nav.register('casino', () => DailyWheel.onEnterCasino());
+  Nav.register('casino', () => { DailyWheel.onEnterCasino(); Auction.refreshBadge(); });
 
   // Recharge de secours (filet anti-faillite)
   $('#rescueBtn').addEventListener('click', () => {

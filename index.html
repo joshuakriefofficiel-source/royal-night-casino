@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=68">
+<link rel="stylesheet" href="style.css?v=69">
 </head>
 <body>
 
@@ -92,6 +92,7 @@
       </div>
       <div class="wheel-cta">
         <button class="wheel-btn" id="wheelBtn">🎡 Roue quotidienne <span class="wheel-badge" id="wheelBadge"></span></button>
+        <button class="wheel-btn" id="auctionBtn">🏆 Enchères mondiales <span class="wheel-badge" id="auctionBadge"></span></button>
       </div>
       <div class="games-grid">
         <button class="game-card" data-game="dice">
@@ -722,6 +723,26 @@
   </div>
 </div>
 
+<!-- ══════════════════ ENCHÈRES MONDIALES (toutes les 3 h) ══════════════════ -->
+<div id="auction" class="wheel-modal hidden">
+  <div class="wheel-box auction-box">
+    <button class="wheel-close" id="auctionClose" aria-label="Fermer">✕</button>
+    <h2 class="wheel-title">🏆 Enchères mondiales</h2>
+    <p class="wheel-sub">Un lot rare, mondial, change <b>toutes les 3 heures</b>. Le chrono tourne en temps réel, même hors jeu.</p>
+    <div class="auction-lot">
+      <div class="auction-img" id="auctionImg"></div>
+      <div class="auction-info">
+        <div class="auction-name" id="auctionName">—</div>
+        <div class="auction-value" id="auctionValue"></div>
+        <div class="auction-price" id="auctionPrice"></div>
+      </div>
+    </div>
+    <div class="auction-timer" id="auctionTimer">—</div>
+    <div class="wheel-result" id="auctionResult"></div>
+    <button class="btn-primary big" id="auctionBuy">Enchérir</button>
+  </div>
+</div>
+
 <!-- ══════════════════ HUD DUO (co-op temps réel) ══════════════════ -->
 <div id="duoHud" class="duo-hud hidden" aria-live="polite">
   <div class="duo-head">🤝 <b>Duo</b> <span class="duo-rank" id="duoRank">Novices</span> <span id="duoLink" class="duo-link">● en ligne</span></div>
@@ -731,8 +752,19 @@
     <div class="duo-bar"><div class="duo-bar-fill" id="duoBarFill"></div></div>
     <div class="duo-goal-sub" id="duoGoalSub">0 € / 100 000 €</div>
   </div>
+  <div class="duo-emotes" id="duoEmotes">
+    <button data-emote="👋" title="Salut">👋</button>
+    <button data-emote="🆘" title="À l'aide">🆘</button>
+    <button data-emote="💰" title="Vends ici">💰</button>
+    <button data-emote="🔥" title="Go go go">🔥</button>
+    <button data-emote="👍" title="OK">👍</button>
+    <button data-emote="😂" title="Haha">😂</button>
+  </div>
   <button class="duo-open" id="duoOpen">🏦 Coffre &amp; cadeaux</button>
 </div>
+
+<!-- Emote flottante reçue du partenaire -->
+<div id="emoteFloat" class="emote-float" aria-hidden="true"></div>
 
 <!-- ══════════════════ PANNEAU DUO (coffre, rang, cadeaux) ══════════════════ -->
 <div id="duoPanel" class="duo-panel hidden">
@@ -788,7 +820,7 @@
   </div>
 </div>
 
-<script src="world.js?v=68"></script>
-<script src="app.js?v=68"></script>
+<script src="world.js?v=69"></script>
+<script src="app.js?v=69"></script>
 </body>
 </html>

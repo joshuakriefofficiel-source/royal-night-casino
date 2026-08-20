@@ -617,6 +617,35 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .duo-open{width:100%;margin-top:.6rem;background:var(--glass);border:1px solid var(--gold-deep);color:var(--gold-2);
   border-radius:9px;padding:.45rem;font-size:.8rem;font-weight:600;cursor:pointer;transition:border-color .2s,background .2s}
 .duo-open:hover{border-color:var(--gold);background:rgba(217,180,91,.12)}
+.duo-emotes{display:flex;gap:.25rem;margin-top:.55rem;justify-content:space-between}
+.duo-emotes button{flex:1;background:#0d0d10;border:1px solid var(--line);border-radius:8px;padding:.3rem 0;
+  font-size:1rem;cursor:pointer;transition:transform .12s,border-color .2s}
+.duo-emotes button:hover{border-color:var(--gold);transform:translateY(-2px) scale(1.08)}
+.duo-emotes button:active{transform:scale(.92)}
+/* Emote flottante reçue */
+.emote-float{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:230;font-size:5rem;
+  pointer-events:none;opacity:0;filter:drop-shadow(0 8px 20px rgba(0,0,0,.5))}
+.emote-float.show{animation:emotePop 1.6s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes emotePop{0%{opacity:0;transform:translate(-50%,-30%) scale(.3)}
+  20%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}
+  70%{opacity:1;transform:translate(-50%,-55%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-90%) scale(.9)}}
+@media(prefers-reduced-motion:reduce){.emote-float.show{animation:emotePopRM 1.4s ease forwards}
+  @keyframes emotePopRM{0%,100%{opacity:0}20%,70%{opacity:1}}}
+
+/* ─── Enchères mondiales ─── */
+.wheel-cta{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center}
+.auction-box{max-width:460px}
+.auction-lot{display:flex;align-items:center;gap:1rem;background:var(--glass);border:1px solid var(--gold-deep);
+  border-radius:14px;padding:1rem;margin:1rem 0}
+.auction-img{width:96px;height:64px;flex:0 0 auto;display:grid;place-items:center;background:#0a0a0d;border:1px solid var(--line);border-radius:10px}
+.auction-img .veh{width:100%;height:48px}
+.auction-info{text-align:left;min-width:0}
+.auction-name{font-family:var(--font-display);color:var(--gold-2);font-size:1.1rem;letter-spacing:.02em}
+.auction-value{color:var(--txt-dim);font-size:.82rem;text-decoration:line-through;font-variant-numeric:tabular-nums}
+.auction-price{color:#7fe0a0;font-weight:700;font-size:1.25rem;font-variant-numeric:tabular-nums;margin-top:.15rem}
+.auction-timer{font-family:var(--font-display);color:var(--gold);letter-spacing:.06em;font-variant-numeric:tabular-nums;margin:.4rem 0}
+.wheel-btn .wheel-badge:empty{display:none}
 
 /* ─── Panneau Duo (coffre, rang, cadeaux) ─── */
 .duo-panel{position:fixed;inset:0;z-index:215;display:grid;place-items:center;padding:1.2rem;overflow-y:auto;
