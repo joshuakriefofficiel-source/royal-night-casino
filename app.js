@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '83';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '84';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -36,6 +36,22 @@ const TrustedTime = (() => {
 const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 /** Formatage FR des nombres (séparateur de milliers). */
 const fmt = (n) => Math.round(n).toLocaleString('fr-FR');
+/** Affichage COMPACT façon jeu : 3,5K · 1,76M · 2,3B · 4T. */
+const fmtShort = (n) => {
+  n = Math.round(Number(n) || 0);
+  const sign = n < 0 ? '-' : '', abs = Math.abs(n);
+  if (abs < 1000) return sign + abs;
+  const units = [['T', 1e12], ['B', 1e9], ['M', 1e6], ['K', 1e3]];
+  for (const [suf, div] of units) {
+    if (abs >= div) {
+      const v = abs / div;
+      const s = (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2))
+        .replace(/\.?0+$/, '').replace('.', ',');   // 1.76 → 1,76 (FR)
+      return sign + s + suf;
+    }
+  }
+  return sign + abs;
+};
 /** Libellé lisible d'un jeu. */
 const GAME_LABELS = { dice: 'Dés', blackjack: 'Blackjack', poker: 'Poker', slot: 'Machine à rouleaux' };
 const gameLabel = (g) => GAME_LABELS[g] || g;
@@ -409,7 +425,7 @@ const Bank = (() => {
   // Niveau requis pour débloquer chaque jeu (identique dans les deux emplois).
   // Tous les jeux du casino sont accessibles dès le début (niveau 1).
   const GAME_UNLOCK = { slot: 1, blackjack: 1, poker: 1, dice: 1 };
-  const IE_UNLOCK_CASH = 10000;   // il faut avoir atteint 10 000 $ pour débloquer l'Import/Export
+  const IE_UNLOCK_CASH = 3500;   // il faut avoir atteint 3 500 $ pour débloquer l'Import/Export
 
   const freshMode = () => ({
     balance: START, history: [], stats: { games: 0, wins: 0, biggest: 0 },
@@ -672,11 +688,12 @@ const UI = (() => {
   };
 
   const syncBalance = (bal) => {
-    $('#navBalanceVal').textContent = fmt(bal);
-    const pb = $('#profileBalance'); if (pb) pb.textContent = fmt(bal);
+    // Solde compact (3,5K · 1,76M…) dans la barre ; montant exact en infobulle.
+    const nb = $('#navBalanceVal'); if (nb) nb.textContent = fmtShort(bal);
+    const pill = $('#navBalance'); if (pill) pill.title = fmt(bal) + ' $';
+    const pb = $('#profileBalance'); if (pb) { pb.textContent = fmtShort(bal); pb.title = fmt(bal) + ' $'; }
     const rb = $('#rescueBtn'); if (rb) rb.classList.toggle('hidden', !Bank.canRescue());
-    const pill = $('#navBalance');
-    pill.classList.remove('flash'); void pill.offsetWidth; pill.classList.add('flash');
+    if (pill) { pill.classList.remove('flash'); void pill.offsetWidth; pill.classList.add('flash'); }
     renderHistory();
   };
 
