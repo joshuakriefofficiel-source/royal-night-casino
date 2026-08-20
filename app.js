@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '73';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '74';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1981,7 +1981,9 @@ const ImportExport = (() => {
   // ── Demande ALÉATOIRE par pays × véhicule, qui change toutes les 5 min ────
   // Stable pendant 5 min (fini le prix qui bouge à chaque clic) puis re-tirée.
   const EPOCH_MS = 5 * 60 * 1000;
-  const demandEpoch = () => Math.floor(Date.now() / EPOCH_MS);
+  // Fenêtre de demande basée sur l'HEURE SERVEUR (TrustedTime) → le marché mondial
+  // est IDENTIQUE pour tous les joueurs connectés, partout, en même temps.
+  const demandEpoch = () => Math.floor(TrustedTime.now() / EPOCH_MS);
   // 0,70 – 1,65 : certains véhicules sont bien plus demandés dans certains pays.
   const demandFactor = (country, name) => 0.70 + (hash(country + '»' + name + '#' + demandEpoch()) % 96) / 100;
   // Niveau de demande lisible (pour l'affichage) : 1 (faible) … 5 (brûlante).
@@ -1989,8 +1991,8 @@ const ImportExport = (() => {
     const f = demandFactor(country, name);
     return f >= 1.45 ? 5 : f >= 1.25 ? 4 : f >= 1.05 ? 3 : f >= 0.88 ? 2 : 1;
   };
-  // Temps restant (ms) avant le prochain tirage de la demande.
-  const demandResetIn = () => EPOCH_MS - (Date.now() % EPOCH_MS);
+  // Temps restant (ms) avant le prochain tirage de la demande (heure serveur).
+  const demandResetIn = () => EPOCH_MS - (TrustedTime.now() % EPOCH_MS);
   // Prix de vente unitaire brut (avant douane), piloté par la demande du moment.
   const grossUnit = (country, name, base) => Math.round(base * demandFactor(country, name));
   // Prix net encaissé (après douane).
@@ -2953,8 +2955,9 @@ const Auction = (() => {
     { cat: 'velo', name: 'Vélo en or 24 carats', v: 250000 },
   ];
   const KEY = 'rnc_auctionWin';        // dernière fenêtre où on a acheté
-  const windowId = () => Math.floor(Date.now() / PERIOD);
-  const timeLeft = () => PERIOD - (Date.now() % PERIOD);
+  // Fenêtre basée sur l'HEURE SERVEUR → même lot rare pour tout le monde, partout.
+  const windowId = () => Math.floor(TrustedTime.now() / PERIOD);
+  const timeLeft = () => PERIOD - (TrustedTime.now() % PERIOD);
   // Lot + décote déterministes pour la fenêtre courante (identiques pour tous).
   const currentLot = () => {
     const w = windowId(), h = hash('lot#' + w);
