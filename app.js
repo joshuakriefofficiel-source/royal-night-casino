@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '87';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '88';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -433,6 +433,7 @@ const Bank = (() => {
     employees: {}, autoOn: true,
     ieUnlocked: false,             // Import/Export débloqué une fois 10 000 $ atteints
     repXp: 0, repLevel: 1, followers: 0, posts: [], postTimes: [],   // réseau social
+    horses: {},                    // chevaux possédés → niveau d'amélioration (idx: level)
   });
   // Deux « emplois » = deux sauvegardes indépendantes.
   const state = { mode: 'commerce', immoUnlocked: false, lastWheel: 0, commerce: freshMode(), immobilier: freshMode() };
@@ -464,6 +465,7 @@ const Bank = (() => {
     if (Number.isFinite(m.followers) && m.followers >= 0) f.followers = m.followers;
     if (Array.isArray(m.posts)) f.posts = m.posts.slice(0, 60);
     if (Array.isArray(m.postTimes)) f.postTimes = m.postTimes.slice(-5);
+    if (m.horses && typeof m.horses === 'object') f.horses = m.horses;
     return f;
   };
   // Réinitialise l'état en mémoire (avant de charger un emplacement).
@@ -551,6 +553,13 @@ const Bank = (() => {
     canPost() { return this.postsLeft() > 0; },
     nextPostMs() { const r = this.recentPosts().slice().sort((a, b) => a - b); if (r.length < 5) return 0; return Math.max(0, 5 * 3600000 - (TrustedTime.now() - r[0])); },
     recordPost() { const c = cur(); c.postTimes = this.recentPosts(); c.postTimes.push(TrustedTime.now()); c.postTimes = c.postTimes.slice(-5); save(); },
+
+    // ── Chevaux (achat / amélioration) ────────────────────────────────────
+    get horses() { return cur().horses || (cur().horses = {}); },
+    ownsHorse(i) { return cur().horses[i] !== undefined; },
+    horseLevel(i) { return cur().horses[i] || 0; },
+    buyHorse(i, cost) { const c = cur(); if (c.horses[i] !== undefined || c.balance < cost) return false; c.balance -= cost; c.horses[i] = 0; save(); emit(); return true; },
+    upgradeHorse(i, cost) { const c = cur(); if (c.horses[i] === undefined || c.balance < cost) return false; c.balance -= cost; c.horses[i]++; save(); emit(); return true; },
 
     onChange(fn) { listeners.push(fn); fn(cur().balance); },
     onXp(fn) { xpListeners.push(fn); fn(cur().level, cur().xp, xpForLevel(cur().level)); },
@@ -3531,18 +3540,47 @@ const MoneyWheel = (() => {
    ====================================================================== */
 const HorseRace = (() => {
   const HORSES = [
-    { n: 'Éclair', e: '🐎', odds: 2.5, w: 34 }, { n: 'Tonnerre', e: '🐴', odds: 3.5, w: 24 },
-    { n: 'Mistral', e: '🐎', odds: 5, w: 17 }, { n: 'Ouragan', e: '🐴', odds: 8, w: 11 },
-    { n: 'Tempête', e: '🐎', odds: 14, w: 7 }, { n: 'Comète', e: '🐴', odds: 25, w: 4 },
+    { n: 'Éclair', e: '🐎' }, { n: 'Tonnerre', e: '🐴' }, { n: 'Mistral', e: '🐎' },
+    { n: 'Ouragan', e: '🐴' }, { n: 'Tempête', e: '🐎' }, { n: 'Comète', e: '🐴' },
   ];
-  const totalW = HORSES.reduce((a, h) => a + h.w, 0);
+  const PAYOUT = 6;                 // gain = mise × 6 si votre cheval gagne
+  const BUY = 20000;               // prix d'achat d'un cheval
+  const UPG = [15000, 40000, 90000, 180000, 350000];   // coût pour passer au niveau suivant
+  const MAXLVL = UPG.length;        // niveau max 5
+  // Poids (chance) : 1 pour tous ; posséder +0,2 ; chaque niveau +0,5.
+  const weightOf = (i) => 1 + (Bank.ownsHorse(i) ? 0.2 + Bank.horseLevel(i) * 0.5 : 0);
+  const upgCost = (lvl) => UPG[lvl];
   let track, bet, pick = -1, busy = false;
+
   const buildTrack = () => { track.innerHTML = HORSES.map((h, i) => `<div class="hr-lane"><span class="hr-lane-num">${i + 1}</span><span class="hr-horse" id="hrH${i}" style="left:0">${h.e}</span></div>`).join(''); };
+
   const renderPicks = () => {
-    $('#hrPicks').innerHTML = HORSES.map((h, i) => `<div class="hr-pick${i === pick ? ' sel' : ''}" data-i="${i}"><div class="hr-name">${h.n}</div><div class="hr-odds">${h.odds}×</div><small>cheval ${i + 1}</small></div>`).join('');
-    const btn = $('#hrRun'); if (btn) { btn.disabled = pick < 0 || busy; btn.textContent = pick < 0 ? 'SÉLECTIONNEZ UN CHEVAL' : `PARIER SUR ${HORSES[pick].n}`; }
+    const weights = HORSES.map((_, i) => weightOf(i));
+    const tot = weights.reduce((a, b) => a + b, 0);
+    $('#hrPicks').innerHTML = HORSES.map((h, i) => {
+      const chance = Math.round(weights[i] / tot * 100);
+      const owned = Bank.ownsHorse(i), lvl = Bank.horseLevel(i);
+      let shop;
+      if (!owned) shop = `<button class="hr-shop" data-shop="${i}">🐴 Acheter ${fmtShort(BUY)} €</button>`;
+      else if (lvl < MAXLVL) shop = `<button class="hr-shop up" data-shop="${i}">⬆ Améliorer ${fmtShort(upgCost(lvl))} €</button>`;
+      else shop = `<span class="hr-max">✦ Niveau max</span>`;
+      return `<div class="hr-pick${i === pick ? ' sel' : ''}${owned ? ' owned' : ''}" data-i="${i}">
+        <div class="hr-name">${h.e} ${h.n}${owned ? ` <b class="hr-lvl">Niv.${lvl}</b>` : ''}</div>
+        <div class="hr-chance">${chance}% de gagner</div>
+        ${shop}
+      </div>`;
+    }).join('');
+    const btn = $('#hrRun'); if (btn) { btn.disabled = pick < 0 || busy; btn.textContent = pick < 0 ? 'SÉLECTIONNEZ UN CHEVAL' : `PARIER SUR ${HORSES[pick].n} (gain ×${PAYOUT})`; }
   };
-  const pickWinner = () => { let r = Math.random() * totalW; for (let i = 0; i < HORSES.length; i++) { r -= HORSES[i].w; if (r < 0) return i; } return 0; };
+
+  const pickWinner = () => {
+    const weights = HORSES.map((_, i) => weightOf(i));
+    const tot = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * tot;
+    for (let i = 0; i < HORSES.length; i++) { r -= weights[i]; if (r < 0) return i; }
+    return HORSES.length - 1;
+  };
+
   const run = async () => {
     if (busy || pick < 0) return;
     const stake = bet.read(); if (stake === null) return;
@@ -3560,18 +3598,37 @@ const HorseRace = (() => {
     await wait(durs[winner] * 1000 + 350); clearInterval(ti);
     const wh = $('#hrH' + winner); if (wh) wh.classList.add('win');
     const won = winner === pick;
-    const ret = won ? Math.round(stake * HORSES[pick].odds) : 0;
+    const ret = won ? stake * PAYOUT : 0;
     const net = ret - stake;
     const res = $('#hrResult');
-    if (won) { Bank.addWinnings(ret); res.textContent = `🏆 ${HORSES[winner].n} gagne ! Vous remportez ${fmt(ret)} € (net +${fmt(net)}) !`; res.className = 'hr-result win'; Sound.play('win'); UI.coinRain(18); }
+    if (won) { Bank.addWinnings(ret); res.textContent = `🏆 ${HORSES[winner].n} gagne ! ×${PAYOUT} → ${fmt(ret)} € (net +${fmt(net)}) !`; res.className = 'hr-result win'; Sound.play('win'); UI.coinRain(18); }
     else { res.textContent = `${HORSES[winner].n} l'emporte. Votre ${HORSES[pick].n} termine derrière — perdu ${fmt(stake)} €.`; res.className = 'hr-result lose'; Sound.play('lose'); }
     Bank.record(net, 'Chevaux');
     busy = false; renderPicks();
   };
+
+  const doShop = (i) => {
+    if (!Bank.ownsHorse(i)) {
+      if (Bank.buyHorse(i, BUY)) { Sound.play('chip'); UI.toast(`🐴 ${HORSES[i].n} acheté ! Améliorez-le pour booster ses chances.`, 'win'); }
+      else UI.toast(`Il faut ${fmt(BUY)} € pour acheter ce cheval.`, 'lose');
+    } else {
+      const lvl = Bank.horseLevel(i); if (lvl >= MAXLVL) return;
+      if (Bank.upgradeHorse(i, upgCost(lvl))) { Sound.play('win'); UI.coinRain(8); UI.toast(`⬆ ${HORSES[i].n} amélioré au niveau ${lvl + 1} — plus de chances de gagner !`, 'win'); }
+      else UI.toast(`Il faut ${fmt(upgCost(lvl))} € pour améliorer.`, 'lose');
+    }
+    renderPicks();
+  };
+
   const init = () => {
     track = $('#hrTrack'); bet = makeBetControls($('#hrBetDock'), { defaultBet: 50 });
     buildTrack(); renderPicks();
-    $('#hrPicks').addEventListener('click', (e) => { if (busy) return; const p = e.target.closest('[data-i]'); if (!p) return; pick = Number(p.dataset.i); Sound.play('chip'); renderPicks(); });
+    $('#hrPicks').addEventListener('click', (e) => {
+      if (busy) return;
+      const shop = e.target.closest('[data-shop]');
+      if (shop) { doShop(Number(shop.dataset.shop)); return; }
+      const p = e.target.closest('[data-i]'); if (!p) return;
+      pick = Number(p.dataset.i); Sound.play('chip'); renderPicks();
+    });
     $('#hrRun').addEventListener('click', run);
   };
   const onEnter = () => { renderPicks(); };

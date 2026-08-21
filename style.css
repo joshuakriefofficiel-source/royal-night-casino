@@ -220,9 +220,15 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .hr-pick{min-width:96px;padding:.55rem;border-radius:12px;cursor:pointer;text-align:center;background:#141419;border:2px solid var(--line);color:#fff;transition:transform .12s,border-color .2s;user-select:none}
 .hr-pick:hover{transform:translateY(-2px)}
 .hr-pick.sel{border-color:var(--gold);background:rgba(217,180,91,.1)}
-.hr-pick .hr-name{font-weight:700;font-size:.85rem}
-.hr-pick .hr-odds{color:var(--gold-2);font-weight:800;font-variant-numeric:tabular-nums}
-.hr-pick small{display:block;color:var(--txt-dim);font-size:.66rem}
+.hr-pick{min-width:130px}
+.hr-pick.owned{border-color:rgba(217,180,91,.4)}
+.hr-pick .hr-name{font-weight:700;font-size:.82rem;white-space:nowrap}
+.hr-lvl{color:#1a1206;background:linear-gradient(180deg,var(--gold-2),var(--gold-deep));border-radius:5px;padding:0 .3rem;font-size:.66rem}
+.hr-chance{color:var(--gold-2);font-weight:700;font-variant-numeric:tabular-nums;font-size:.78rem;margin:.25rem 0 .4rem}
+.hr-shop{width:100%;background:#0d0d10;border:1px solid var(--gold-deep);color:var(--gold-2);border-radius:8px;padding:.35rem;font-size:.72rem;font-weight:600;cursor:pointer;transition:.15s}
+.hr-shop:hover{border-color:var(--gold);background:rgba(217,180,91,.1)}
+.hr-shop.up{border-color:#28a05a;color:#7fe0a0}.hr-shop.up:hover{background:rgba(63,174,107,.12)}
+.hr-max{display:block;color:var(--gold);font-size:.72rem;font-weight:600}
 
 /* ═══════════ BACCARAT ═══════════ */
 .bac-table{display:flex;align-items:center;justify-content:center;gap:1.4rem;flex-wrap:wrap;
