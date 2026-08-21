@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '84';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '86';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -821,6 +821,7 @@ const Nav = (() => {
     home: 'view-home', casino: 'view-casino', profile: 'view-profile', concession: 'view-concession',
     importexport: 'view-importexport', social: 'view-social', agence: 'view-agence', ventelocation: 'view-ventelocation',
     dice: 'view-dice', blackjack: 'view-blackjack', poker: 'view-poker', slot: 'view-slot',
+    roulette: 'view-roulette', moneywheel: 'view-moneywheel',
   };
   let current = 'home';
   const onEnter = {};
@@ -3319,6 +3320,212 @@ const Social = (() => {
 })();
 
 /* ======================================================================
+   11 terdecies. ROULETTE EUROPÉENNE — roue 0–36, bille animée, paiements réels
+   ====================================================================== */
+const Roulette = (() => {
+  const SEQ = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+  const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+  const colorOf = (n) => n === 0 ? 'green' : (RED.has(n) ? 'red' : 'black');
+  let wheel, board, bet, bets = {}, busy = false, rot = 0, history = [];
+
+  const buildWheel = () => {
+    const C = 150, R = 148, ri = 96, N = SEQ.length, seg = 360 / N;
+    let paths = '', nums = '';
+    const pt = (a, r) => [C + r * Math.sin(a * Math.PI / 180), C - r * Math.cos(a * Math.PI / 180)];
+    SEQ.forEach((n, i) => {
+      const a0 = i * seg - seg / 2, a1 = i * seg + seg / 2;
+      const [x0, y0] = pt(a0, R), [x1, y1] = pt(a1, R), [x2, y2] = pt(a1, ri), [x3, y3] = pt(a0, ri);
+      const col = colorOf(n) === 'green' ? '#12a15f' : colorOf(n) === 'red' ? '#c0223a' : '#141419';
+      paths += `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)} A ${ri} ${ri} 0 0 0 ${x3.toFixed(1)} ${y3.toFixed(1)} Z" fill="${col}" stroke="#e8d5a0" stroke-width=".6"/>`;
+      const [tx, ty] = pt(i * seg, (R + ri) / 2);
+      nums += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" transform="rotate(${i * seg} ${tx.toFixed(1)} ${ty.toFixed(1)})" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="9" font-weight="700">${n}</text>`;
+    });
+    wheel.innerHTML = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="150" cy="150" r="150" fill="#2a1c0c"/>
+      <g id="roulDisc">${paths}${nums}</g>
+      <circle cx="150" cy="150" r="90" fill="none" stroke="#d9b45b" stroke-width="6"/>
+      <circle cx="150" cy="150" r="70" fill="#241a0e" stroke="#7a5e1f" stroke-width="2"/>
+      <circle cx="150" cy="150" r="30" fill="#d9b45b"/>
+      <circle id="roulBall" cx="150" cy="14" r="7" fill="#fff" stroke="#bbb" stroke-width="1"/>
+    </svg>`;
+  };
+
+  const buildBoard = () => {
+    let html = `<div class="rb-cell rb-zero rb-num green" data-bet="n:0" style="grid-row:1/4;grid-column:1">0</div>`;
+    for (let r = 0; r < 3; r++) for (let c = 1; c <= 12; c++) {
+      const n = 3 * c - r;
+      html += `<div class="rb-cell rb-num ${colorOf(n)}" data-bet="n:${n}" style="grid-row:${r + 1};grid-column:${c + 1}">${n}</div>`;
+    }
+    // Colonnes 2:1 (droite) : ligne1=col3, ligne2=col2, ligne3=col1.
+    ['c3', 'c2', 'c1'].forEach((k, r) => { html += `<div class="rb-cell rb-col" data-bet="${k}" style="grid-row:${r + 1};grid-column:14">2:1</div>`; });
+    // Douzaines (ligne 4)
+    [['d1', '1–12', 2], ['d2', '13–24', 6], ['d3', '25–36', 10]].forEach(([k, lab, cs]) =>
+      html += `<div class="rb-cell rb-out" data-bet="${k}" style="grid-row:4;grid-column:${cs}/span 4">${lab}</div>`);
+    // Chances simples (ligne 5)
+    [['low', '1–18', 2, ''], ['even', 'PAIR', 4, ''], ['red', 'ROUGE', 6, 'red'], ['black', 'NOIR', 8, 'black'], ['odd', 'IMPAIR', 10, ''], ['high', '19–36', 12, '']].forEach(([k, lab, cs, cl]) =>
+      html += `<div class="rb-cell rb-out ${cl}" data-bet="${k}" style="grid-row:5;grid-column:${cs}/span 2">${lab}</div>`);
+    board.innerHTML = html;
+  };
+
+  const totalStaked = () => Object.values(bets).reduce((a, b) => a + b, 0);
+  const renderChips = () => {
+    $$('.rb-chip', board).forEach((c) => c.remove());
+    Object.entries(bets).forEach(([k, v]) => { const cell = board.querySelector(`[data-bet="${k}"]`); if (cell) cell.insertAdjacentHTML('beforeend', `<span class="rb-chip">${fmtShort(v)}</span>`); });
+    $('#roulStaked').textContent = 'Mise sur la table : ' + fmt(totalStaked()) + ' €';
+  };
+  const renderHistory = () => {
+    $('#roulHistory').innerHTML = history.slice(0, 12).map((n) => `<span class="roul-hist-num rn-${colorOf(n)}">${n}</span>`).join('');
+  };
+
+  const payout = (w) => {
+    let ret = 0;
+    const inCol = (c, n) => n !== 0 && (n - 1) % 3 === c;
+    for (const [k, v] of Object.entries(bets)) {
+      if (k.startsWith('n:')) { if (Number(k.slice(2)) === w) ret += v * 36; }
+      else if (k === 'red' && colorOf(w) === 'red') ret += v * 2;
+      else if (k === 'black' && colorOf(w) === 'black') ret += v * 2;
+      else if (k === 'even' && w !== 0 && w % 2 === 0) ret += v * 2;
+      else if (k === 'odd' && w % 2 === 1) ret += v * 2;
+      else if (k === 'low' && w >= 1 && w <= 18) ret += v * 2;
+      else if (k === 'high' && w >= 19 && w <= 36) ret += v * 2;
+      else if (k === 'd1' && w >= 1 && w <= 12) ret += v * 3;
+      else if (k === 'd2' && w >= 13 && w <= 24) ret += v * 3;
+      else if (k === 'd3' && w >= 25 && w <= 36) ret += v * 3;
+      else if (k === 'c1' && inCol(0, w)) ret += v * 3;
+      else if (k === 'c2' && inCol(1, w)) ret += v * 3;
+      else if (k === 'c3' && inCol(2, w)) ret += v * 3;
+    }
+    return ret;
+  };
+
+  const spin = async () => {
+    if (busy) return;
+    const total = totalStaked();
+    if (total <= 0) { UI.toast('Placez au moins un jeton sur le tapis.', 'lose'); return; }
+    if (Bank.balance < total) { UI.toast('Solde insuffisant pour ces mises.', 'lose'); return; }
+    busy = true; $('#roulSpin').disabled = true; $('#roulClear').disabled = true;
+    Bank.placeBet(total);
+    const w = randInt(0, 36);
+    const idx = SEQ.indexOf(w), seg = 360 / SEQ.length;
+    // La roue tourne pour amener le secteur w sous le repère (en haut).
+    const target = ((360 - idx * seg) % 360 + 360) % 360;
+    rot += 6 * 360 + (((target - (rot % 360)) % 360) + 360) % 360;
+    const disc = $('#roulDisc'); const ball = $('#roulBall');
+    if (disc) disc.style.transition = 'transform 5s cubic-bezier(.17,.67,.12,1)';
+    if (disc) disc.style.transform = `rotate(${rot}deg)`;
+    // La bille tourne dans l'autre sens puis se pose.
+    if (ball) { ball.style.transition = 'transform 5s cubic-bezier(.2,.6,.2,1)'; ball.style.transformOrigin = '150px 150px'; ball.style.transform = `rotate(${-(4 * 360 + Math.random() * 360)}deg)`; }
+    Sound.play('lever');
+    let ticks = 30; const ti = setInterval(() => { Sound.play('reel'); if (--ticks <= 0) clearInterval(ti); }, 140);
+    await wait(5100); clearInterval(ti);
+    const ret = payout(w);
+    const net = ret - total;
+    history.unshift(w); renderHistory();
+    const res = $('#roulResult');
+    if (ret > 0) { Bank.addWinnings(ret); res.textContent = `🎉 ${w} ${colorOf(w) === 'red' ? 'Rouge' : colorOf(w) === 'black' ? 'Noir' : 'Vert'} — vous gagnez ${fmt(ret)} € (net ${net >= 0 ? '+' : ''}${fmt(net)}) !`; res.className = 'roul-result win'; Sound.play('win'); UI.coinRain(net > 0 ? 18 : 8); }
+    else { res.textContent = `${w} ${colorOf(w) === 'red' ? 'Rouge' : colorOf(w) === 'black' ? 'Noir' : 'Vert'} — perdu −${fmt(total)} €.`; res.className = 'roul-result lose'; Sound.play('lose'); }
+    Bank.record(net, 'Roulette');
+    bets = {}; renderChips();
+    busy = false; $('#roulSpin').disabled = false; $('#roulClear').disabled = false;
+  };
+
+  const init = () => {
+    wheel = $('#roulWheel'); board = $('#roulBoard');
+    bet = makeBetControls($('#roulBetDock'), { defaultBet: 50 });
+    buildWheel(); buildBoard(); renderHistory();
+    board.addEventListener('click', (e) => {
+      if (busy) return; const cell = e.target.closest('[data-bet]'); if (!cell) return;
+      const amt = bet.read(); if (amt === null) return;
+      const k = cell.dataset.bet; bets[k] = (bets[k] || 0) + amt;
+      Sound.play('chip'); renderChips();
+    });
+    $('#roulClear').addEventListener('click', () => { if (busy) return; bets = {}; renderChips(); Sound.play('click'); });
+    $('#roulSpin').addEventListener('click', spin);
+  };
+  const onEnter = () => { renderChips(); renderHistory(); };
+  return { init, onEnter };
+})();
+
+/* ======================================================================
+   11 quaterdecies. MONEY WHEEL — grande roue à multiplicateurs
+   ====================================================================== */
+const MoneyWheel = (() => {
+  // Segments (Big Six) : le multiplicateur et le nombre de cases (poids).
+  const SEGS = [
+    { m: 1, n: 10, col: '#2b6cb0' }, { m: 2, n: 8, col: '#12a15f' }, { m: 5, n: 4, col: '#e8a422' },
+    { m: 10, n: 3, col: '#8e44ad' }, { m: 20, n: 2, col: '#e2601e' }, { m: 40, n: 1, col: '#c0223a' },
+  ];
+  // Anneau réel des cases : entrelacé (round-robin) pour bien répartir les gros lots.
+  const ORDER = (() => { const r = []; const buckets = SEGS.map((s) => Array(s.n).fill(s)); let any = true; while (any) { any = false; buckets.forEach((b) => { if (b.length) { r.push(b.pop()); any = true; } }); } return r; })();
+
+  let wheel, bet, bets = {}, busy = false, rot = 0;
+
+  const build = () => {
+    const C = 150, R = 148, ri = 60, N = ORDER.length, seg = 360 / N;
+    const pt = (a, r) => [C + r * Math.sin(a * Math.PI / 180), C - r * Math.cos(a * Math.PI / 180)];
+    let paths = '', labels = '';
+    ORDER.forEach((s, i) => {
+      const a0 = i * seg - seg / 2, a1 = i * seg + seg / 2;
+      const [x0, y0] = pt(a0, R), [x1, y1] = pt(a1, R);
+      paths += `<path d="M ${C} ${C} L ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)} Z" fill="${s.col}" stroke="#fff8ee" stroke-width="1"/>`;
+      const [tx, ty] = pt(i * seg, R - 22);
+      labels += `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" transform="rotate(${i * seg} ${tx.toFixed(1)} ${ty.toFixed(1)})" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="13" font-weight="800">${s.m}×</text>`;
+    });
+    wheel.innerHTML = `<svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+      <defs><radialGradient id="mwHub" cx="38%" cy="34%" r="72%"><stop offset="0%" stop-color="#fbeebc"/><stop offset="100%" stop-color="#9b7a2a"/></radialGradient></defs>
+      <circle cx="150" cy="150" r="150" fill="#241a0e"/>
+      <g id="mwDisc">${paths}${labels}</g>
+      <circle cx="150" cy="150" r="30" fill="url(#mwHub)" stroke="#7a5e1f" stroke-width="2.5"/></svg>`;
+  };
+
+  const renderBets = () => {
+    $('#mwBets').innerHTML = SEGS.map((s) => `<div class="mw-bet" data-m="${s.m}" style="border-color:${bets[s.m] ? 'var(--gold)' : ''}">
+      ${s.m}×<small>${bets[s.m] ? fmt(bets[s.m]) + ' €' : 'miser'}</small>${bets[s.m] ? `<span class="mw-chip">${fmtShort(bets[s.m])}</span>` : ''}</div>`).join('');
+    $('#mwStaked').textContent = 'Mise totale : ' + fmt(Object.values(bets).reduce((a, b) => a + b, 0)) + ' €';
+  };
+
+  const spin = async () => {
+    if (busy) return;
+    const total = Object.values(bets).reduce((a, b) => a + b, 0);
+    if (total <= 0) { UI.toast('Misez sur au moins un multiplicateur.', 'lose'); return; }
+    if (Bank.balance < total) { UI.toast('Solde insuffisant.', 'lose'); return; }
+    busy = true; $('#mwSpin').disabled = true; $('#mwClear').disabled = true;
+    Bank.placeBet(total);
+    const idx = randInt(0, ORDER.length - 1), s = ORDER[idx], seg = 360 / ORDER.length;
+    const target = ((360 - idx * seg) % 360 + 360) % 360;
+    rot += 7 * 360 + (((target - (rot % 360)) % 360) + 360) % 360;
+    const disc = $('#mwDisc'); if (disc) { disc.style.transition = 'transform 5.5s cubic-bezier(.15,.7,.12,1)'; disc.style.transform = `rotate(${rot}deg)`; }
+    Sound.play('lever');
+    let ticks = 34; const ti = setInterval(() => { Sound.play('reel'); if (--ticks <= 0) clearInterval(ti); }, 150);
+    await wait(5600); clearInterval(ti);
+    const won = bets[s.m] || 0;
+    const ret = won > 0 ? won * (s.m + 1) : 0;   // gain = mise × multiplicateur (+ mise)
+    const net = ret - total;
+    const res = $('#mwResult');
+    if (ret > 0) { Bank.addWinnings(ret); res.textContent = `🎉 ${s.m}× ! Vous gagnez ${fmt(ret)} € (net ${net >= 0 ? '+' : ''}${fmt(net)}) !`; res.className = 'mw-result win'; Sound.play(s.m >= 20 ? 'jackpot' : 'win'); UI.coinRain(s.m >= 10 ? 26 : 12); }
+    else { res.textContent = `La roue s'arrête sur ${s.m}× — perdu −${fmt(total)} €.`; res.className = 'mw-result lose'; Sound.play('lose'); }
+    Bank.record(net, 'Money Wheel');
+    bets = {}; renderBets();
+    busy = false; $('#mwSpin').disabled = false; $('#mwClear').disabled = false;
+  };
+
+  const init = () => {
+    wheel = $('#mwWheel');
+    bet = makeBetControls($('#mwBetDock'), { defaultBet: 50 });
+    build(); renderBets();
+    $('#mwBets').addEventListener('click', (e) => {
+      if (busy) return; const b = e.target.closest('[data-m]'); if (!b) return;
+      const amt = bet.read(); if (amt === null) return;
+      const m = Number(b.dataset.m); bets[m] = (bets[m] || 0) + amt; Sound.play('chip'); renderBets();
+    });
+    $('#mwClear').addEventListener('click', () => { if (busy) return; bets = {}; renderBets(); Sound.play('click'); });
+    $('#mwSpin').addEventListener('click', spin);
+  };
+  const onEnter = () => { renderBets(); };
+  return { init, onEnter };
+})();
+
+/* ======================================================================
    11 nonies. MULTIJOUEUR EN LIGNE — 2 joueurs via serveur WebSocket
    ====================================================================== */
 const Multiplayer = (() => {
@@ -3945,6 +4152,8 @@ const SlotSelect = (() => {
   DailyWheel.init();
   Auction.init();
   Social.init();
+  Roulette.init();
+  MoneyWheel.init();
   TrustedTime.sync();                          // heure serveur (anti-triche roue)
   setInterval(() => TrustedTime.sync(), 300000); // re-synchro toutes les 5 min
   AgenceImmo.init();
@@ -3975,6 +4184,8 @@ const SlotSelect = (() => {
   Nav.register('dice', DiceGame.onEnter);
   Nav.register('poker', Poker.onEnter);
   Nav.register('slot', Slot.onEnter);
+  Nav.register('roulette', Roulette.onEnter);
+  Nav.register('moneywheel', MoneyWheel.onEnter);
   Nav.register('profile', () => { UI.renderHistory(); UI.renderGarage(); const ac = document.getElementById('autoCard'); if (ac) ac.style.display = 'none'; });
   Nav.register('casino', () => { DailyWheel.onEnterCasino(); Auction.refreshBadge(); });
 

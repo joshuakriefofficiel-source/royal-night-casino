@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=84">
+<link rel="stylesheet" href="style.css?v=86">
 </head>
 <body>
 
@@ -122,6 +122,20 @@
           <div class="gc-ico">🎰</div>
           <h3>Machine à rouleaux</h3>
           <p>Tirez le levier. Trois symboles identiques et le jackpot est à vous.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="roulette">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🎯</div>
+          <h3>Roulette européenne</h3>
+          <p>Le classique 0–36. Misez sur un numéro, une couleur, une douzaine… La bille tourne pour de vrai.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="moneywheel">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🎡</div>
+          <h3>Money Wheel</h3>
+          <p>La grande roue à multiplicateurs. Misez, elle tourne et ralentit… jusqu'à votre gain.</p>
           <span class="gc-play">Jouer →</span>
         </button>
       </div>
@@ -539,6 +553,46 @@
     <button class="btn-primary big" id="slotSpinBtn">TIRER LE LEVIER</button>
   </section>
 
+  <!-- ─────────── JEU : ROULETTE EUROPÉENNE ─────────── -->
+  <section id="view-roulette" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🎯 Roulette européenne</h2>
+    </div>
+    <div class="roul-top">
+      <div class="roul-wheel-wrap"><div class="roul-pointer"></div><div class="roul-wheel" id="roulWheel"></div></div>
+      <div class="roul-side">
+        <div class="roul-result" id="roulResult">Placez vos jetons, puis lancez la bille.</div>
+        <div class="roul-history-lab">Derniers numéros</div>
+        <div class="roul-history" id="roulHistory"></div>
+      </div>
+    </div>
+    <div class="roul-board" id="roulBoard"></div>
+    <div class="roul-staked" id="roulStaked">Mise sur la table : 0 €</div>
+    <div class="bet-dock" id="roulBetDock"></div>
+    <div class="roul-actions">
+      <button class="btn-ghost" id="roulClear">↩ Retirer les jetons</button>
+      <button class="btn-primary big" id="roulSpin">LANCER LA BILLE</button>
+    </div>
+  </section>
+
+  <!-- ─────────── JEU : MONEY WHEEL ─────────── -->
+  <section id="view-moneywheel" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🎡 Money Wheel</h2>
+    </div>
+    <div class="mw-wrap"><div class="mw-pointer"></div><div class="mw-wheel" id="mwWheel"></div></div>
+    <div class="mw-result" id="mwResult">Misez sur un multiplicateur, puis tournez.</div>
+    <div class="mw-bets" id="mwBets"></div>
+    <div class="mw-staked" id="mwStaked">Mise totale : 0 €</div>
+    <div class="bet-dock" id="mwBetDock"></div>
+    <div class="roul-actions">
+      <button class="btn-ghost" id="mwClear">↩ Retirer</button>
+      <button class="btn-primary big" id="mwSpin">TOURNER LA ROUE</button>
+    </div>
+  </section>
+
 </main>
 
 <!-- ══════════════════ ONBOARDING (premier lancement) ══════════════════ -->
@@ -884,7 +938,7 @@
   </div>
 </div>
 
-<script src="world.js?v=84"></script>
-<script src="app.js?v=84"></script>
+<script src="world.js?v=86"></script>
+<script src="app.js?v=86"></script>
 </body>
 </html>
