@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=86">
+<link rel="stylesheet" href="style.css?v=87">
 </head>
 <body>
 
@@ -136,6 +136,27 @@
           <div class="gc-ico">🎡</div>
           <h3>Money Wheel</h3>
           <p>La grande roue à multiplicateurs. Misez, elle tourne et ralentit… jusqu'à votre gain.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="horses">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🐎</div>
+          <h3>Course de chevaux</h3>
+          <p>Pariez sur votre cheval selon sa cote, puis vibrez pendant la course jusqu'à la ligne d'arrivée.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="baccarat">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🃏</div>
+          <h3>Baccarat</h3>
+          <p>Joueur, Banque ou Égalité ? Distribution selon les règles officielles. Le grand jeu des salons privés.</p>
+          <span class="gc-play">Jouer →</span>
+        </button>
+        <button class="game-card" data-game="craps">
+          <div class="gc-glow"></div>
+          <div class="gc-ico">🎯</div>
+          <h3>Craps</h3>
+          <p>Deux dés, Pass / Don't Pass / Field. Le Come Out, le Point… le jeu de dés le plus électrique du casino.</p>
           <span class="gc-play">Jouer →</span>
         </button>
       </div>
@@ -593,6 +614,58 @@
     </div>
   </section>
 
+  <!-- ─────────── JEU : COURSE DE CHEVAUX ─────────── -->
+  <section id="view-horses" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🐎 Course de chevaux</h2>
+    </div>
+    <div class="hr-track" id="hrTrack"></div>
+    <div class="hr-result" id="hrResult">Choisissez un cheval, misez, et lancez la course !</div>
+    <div class="hr-picks" id="hrPicks"></div>
+    <div class="bet-dock" id="hrBetDock"></div>
+    <button class="btn-primary big" id="hrRun" disabled>SÉLECTIONNEZ UN CHEVAL</button>
+  </section>
+
+  <!-- ─────────── JEU : BACCARAT ─────────── -->
+  <section id="view-baccarat" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🃏 Baccarat</h2>
+    </div>
+    <div class="bac-table">
+      <div class="bac-side"><div class="bac-lab">JOUEUR <span id="bacPScore">–</span></div><div class="bac-cards" id="bacPlayer"></div></div>
+      <div class="bac-vs">VS</div>
+      <div class="bac-side"><div class="bac-lab">BANQUE <span id="bacBScore">–</span></div><div class="bac-cards" id="bacBanker"></div></div>
+    </div>
+    <div class="bac-result" id="bacResult">Misez sur Joueur, Banque ou Égalité.</div>
+    <div class="bac-bets" id="bacBets"></div>
+    <div class="bac-staked" id="bacStaked">Mise totale : 0 €</div>
+    <div class="bet-dock" id="bacBetDock"></div>
+    <div class="roul-actions">
+      <button class="btn-ghost" id="bacClear">↩ Retirer</button>
+      <button class="btn-primary big" id="bacDeal">DISTRIBUER</button>
+    </div>
+  </section>
+
+  <!-- ─────────── JEU : CRAPS ─────────── -->
+  <section id="view-craps" class="view game-view">
+    <div class="game-head">
+      <button class="back-link" data-nav="casino">← Retour au Casino</button>
+      <h2 class="game-title">🎯 Craps</h2>
+    </div>
+    <div class="craps-dice"><div class="craps-die" id="crapsD1">⚀</div><div class="craps-die" id="crapsD2">⚁</div></div>
+    <div class="craps-phase" id="crapsPhase">Come Out — misez puis lancez</div>
+    <div class="craps-result" id="crapsResult">Placez vos mises (Pass, Don't Pass, Field) puis lancez les dés.</div>
+    <div class="craps-bets" id="crapsBets"></div>
+    <div class="craps-staked" id="crapsStaked">Mise sur la table : 0 €</div>
+    <div class="bet-dock" id="crapsBetDock"></div>
+    <div class="roul-actions">
+      <button class="btn-ghost" id="crapsClear">↩ Retirer</button>
+      <button class="btn-primary big" id="crapsRoll">LANCER LES DÉS</button>
+    </div>
+  </section>
+
 </main>
 
 <!-- ══════════════════ ONBOARDING (premier lancement) ══════════════════ -->
@@ -938,7 +1011,7 @@
   </div>
 </div>
 
-<script src="world.js?v=86"></script>
-<script src="app.js?v=86"></script>
+<script src="world.js?v=87"></script>
+<script src="app.js?v=87"></script>
 </body>
 </html>

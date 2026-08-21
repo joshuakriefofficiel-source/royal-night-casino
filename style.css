@@ -205,6 +205,56 @@ button{font-family:inherit;cursor:pointer;color:inherit;border:none;background:n
 .mw-bet small{display:block;font-size:.66rem;color:var(--txt-dim);font-weight:500;margin-top:.15rem}
 .mw-bet .mw-chip{position:absolute;top:-8px;right:-8px;background:radial-gradient(circle at 35% 30%,#ffe9a8,#d5a021);border:2px dashed #7a5e1f;color:#3a2708;font-size:.6rem;font-weight:800;border-radius:50%;min-width:22px;height:22px;display:grid;place-items:center;padding:0 3px}
 .mw-staked{text-align:center;color:var(--gold-2);font-variant-numeric:tabular-nums;margin-bottom:.6rem;font-weight:600}
+
+/* ═══════════ COURSE DE CHEVAUX ═══════════ */
+.hr-track{max-width:640px;margin:0 auto 1rem;background:linear-gradient(180deg,#123a1e,#0c2a16);border:2px solid var(--gold-deep);border-radius:14px;padding:.6rem;display:flex;flex-direction:column;gap:.4rem;position:relative}
+.hr-track::after{content:'🏁';position:absolute;top:0;bottom:0;right:8px;display:flex;align-items:center;font-size:1.2rem;opacity:.5}
+.hr-lane{position:relative;height:34px;border-radius:8px;background:rgba(255,255,255,.04);overflow:hidden}
+.hr-lane .hr-lane-num{position:absolute;left:6px;top:50%;transform:translateY(-50%);color:var(--txt-dim);font-size:.72rem;z-index:1}
+.hr-horse{position:absolute;left:0;top:50%;transform:translate(0,-50%);font-size:1.4rem;transition:left linear;z-index:2;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.hr-horse.win{animation:hrWin .5s ease}
+@keyframes hrWin{50%{transform:translate(0,-50%) scale(1.4)}}
+.hr-result{text-align:center;font-family:var(--font-display);color:var(--gold-2);font-size:1.1rem;min-height:1.6em;margin-bottom:.8rem}
+.hr-result.win{color:#7fe0a0}.hr-result.lose{color:#e08a80}
+.hr-picks{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;max-width:620px;margin:0 auto .8rem}
+.hr-pick{min-width:96px;padding:.55rem;border-radius:12px;cursor:pointer;text-align:center;background:#141419;border:2px solid var(--line);color:#fff;transition:transform .12s,border-color .2s;user-select:none}
+.hr-pick:hover{transform:translateY(-2px)}
+.hr-pick.sel{border-color:var(--gold);background:rgba(217,180,91,.1)}
+.hr-pick .hr-name{font-weight:700;font-size:.85rem}
+.hr-pick .hr-odds{color:var(--gold-2);font-weight:800;font-variant-numeric:tabular-nums}
+.hr-pick small{display:block;color:var(--txt-dim);font-size:.66rem}
+
+/* ═══════════ BACCARAT ═══════════ */
+.bac-table{display:flex;align-items:center;justify-content:center;gap:1.4rem;flex-wrap:wrap;
+  background:radial-gradient(ellipse at 50% 0,#1a3a2a,#0c2418);border:2px solid var(--gold-deep);border-radius:18px;padding:1.4rem;max-width:640px;margin:0 auto 1rem}
+.bac-side{text-align:center;min-width:150px}
+.bac-lab{font-family:var(--font-display);color:var(--gold-2);letter-spacing:.06em;margin-bottom:.6rem;font-size:.9rem}
+.bac-lab span{font-size:1.4rem;color:#fff}
+.bac-cards{display:flex;gap:.4rem;justify-content:center;min-height:84px}
+.bac-vs{font-family:var(--font-display);color:var(--gold);font-size:1.1rem}
+.bac-result{text-align:center;font-family:var(--font-display);color:var(--gold-2);font-size:1.15rem;min-height:1.6em;margin-bottom:.8rem}
+.bac-result.win{color:#7fe0a0}.bac-result.lose{color:#e08a80}.bac-result.tie{color:#e8c46a}
+.bac-bets{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;max-width:520px;margin:0 auto .5rem}
+.bac-bet{position:relative;min-width:110px;padding:.7rem;border-radius:12px;cursor:pointer;text-align:center;background:#141419;border:2px solid var(--line);color:#fff;font-weight:700;transition:transform .12s,border-color .2s;user-select:none}
+.bac-bet:hover{transform:translateY(-2px)}.bac-bet.sel{border-color:var(--gold)}
+.bac-bet small{display:block;color:var(--txt-dim);font-size:.68rem;font-weight:500;margin-top:.15rem}
+.bac-bet .bac-chip,.craps-chip{position:absolute;top:-8px;right:-8px;background:radial-gradient(circle at 35% 30%,#ffe9a8,#d5a021);border:2px dashed #7a5e1f;color:#3a2708;font-size:.6rem;font-weight:800;border-radius:50%;min-width:22px;height:22px;display:grid;place-items:center;padding:0 3px}
+.bac-staked{text-align:center;color:var(--gold-2);font-variant-numeric:tabular-nums;margin-bottom:.6rem;font-weight:600}
+
+/* ═══════════ CRAPS ═══════════ */
+.craps-dice{display:flex;gap:1rem;justify-content:center;margin-bottom:.8rem}
+.craps-die{width:70px;height:70px;background:linear-gradient(180deg,#fff,#e8e8ee);border-radius:14px;display:grid;place-items:center;font-size:3rem;color:#1a1a20;box-shadow:0 6px 14px rgba(0,0,0,.5),inset 0 -3px 6px rgba(0,0,0,.15)}
+.craps-die.rolling{animation:crapsRoll .5s linear infinite}
+@keyframes crapsRoll{0%{transform:rotate(-12deg) translateY(0)}50%{transform:rotate(12deg) translateY(-6px)}100%{transform:rotate(-12deg) translateY(0)}}
+.craps-phase{text-align:center;font-family:var(--font-display);color:var(--gold);letter-spacing:.08em;margin-bottom:.4rem}
+.craps-phase.point{color:#e8c46a}
+.craps-result{text-align:center;font-family:var(--font-display);color:var(--gold-2);font-size:1.05rem;min-height:1.6em;margin-bottom:.8rem}
+.craps-result.win{color:#7fe0a0}.craps-result.lose{color:#e08a80}
+.craps-bets{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;max-width:520px;margin:0 auto .5rem}
+.craps-bet{position:relative;min-width:130px;padding:.7rem;border-radius:12px;cursor:pointer;text-align:center;background:#141419;border:2px solid var(--line);color:#fff;font-weight:700;transition:transform .12s,border-color .2s;user-select:none}
+.craps-bet:hover{transform:translateY(-2px)}.craps-bet.on{border-color:var(--gold)}
+.craps-bet small{display:block;color:var(--txt-dim);font-size:.66rem;font-weight:500;margin-top:.15rem}
+.craps-staked{text-align:center;color:var(--gold-2);font-variant-numeric:tabular-nums;margin-bottom:.6rem;font-weight:600}
 .nav-right{display:flex;align-items:center;gap:.6rem}
 .balance-pill{display:flex;align-items:center;gap:.45rem;padding:.42rem .85rem;border-radius:999px;
   background:linear-gradient(180deg,#1c1a15,#111);border:1px solid var(--line);

@@ -7,7 +7,7 @@
 /* ======================================================================
    0. UTILITAIRES GÉNÉRAUX
    ====================================================================== */
-const APP_VERSION = '86';   // ← doit correspondre au ?v= dans index.html (repère de cache)
+const APP_VERSION = '87';   // ← doit correspondre au ?v= dans index.html (repère de cache)
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -822,6 +822,7 @@ const Nav = (() => {
     importexport: 'view-importexport', social: 'view-social', agence: 'view-agence', ventelocation: 'view-ventelocation',
     dice: 'view-dice', blackjack: 'view-blackjack', poker: 'view-poker', slot: 'view-slot',
     roulette: 'view-roulette', moneywheel: 'view-moneywheel',
+    horses: 'view-horses', baccarat: 'view-baccarat', craps: 'view-craps',
   };
   let current = 'home';
   const onEnter = {};
@@ -3526,6 +3527,177 @@ const MoneyWheel = (() => {
 })();
 
 /* ======================================================================
+   11 quindecies. COURSE DE CHEVAUX — pari à la cote, course animée
+   ====================================================================== */
+const HorseRace = (() => {
+  const HORSES = [
+    { n: 'Éclair', e: '🐎', odds: 2.5, w: 34 }, { n: 'Tonnerre', e: '🐴', odds: 3.5, w: 24 },
+    { n: 'Mistral', e: '🐎', odds: 5, w: 17 }, { n: 'Ouragan', e: '🐴', odds: 8, w: 11 },
+    { n: 'Tempête', e: '🐎', odds: 14, w: 7 }, { n: 'Comète', e: '🐴', odds: 25, w: 4 },
+  ];
+  const totalW = HORSES.reduce((a, h) => a + h.w, 0);
+  let track, bet, pick = -1, busy = false;
+  const buildTrack = () => { track.innerHTML = HORSES.map((h, i) => `<div class="hr-lane"><span class="hr-lane-num">${i + 1}</span><span class="hr-horse" id="hrH${i}" style="left:0">${h.e}</span></div>`).join(''); };
+  const renderPicks = () => {
+    $('#hrPicks').innerHTML = HORSES.map((h, i) => `<div class="hr-pick${i === pick ? ' sel' : ''}" data-i="${i}"><div class="hr-name">${h.n}</div><div class="hr-odds">${h.odds}×</div><small>cheval ${i + 1}</small></div>`).join('');
+    const btn = $('#hrRun'); if (btn) { btn.disabled = pick < 0 || busy; btn.textContent = pick < 0 ? 'SÉLECTIONNEZ UN CHEVAL' : `PARIER SUR ${HORSES[pick].n}`; }
+  };
+  const pickWinner = () => { let r = Math.random() * totalW; for (let i = 0; i < HORSES.length; i++) { r -= HORSES[i].w; if (r < 0) return i; } return 0; };
+  const run = async () => {
+    if (busy || pick < 0) return;
+    const stake = bet.read(); if (stake === null) return;
+    if (!Bank.placeBet(stake)) { UI.toast('Mise refusée.', 'lose'); return; }
+    busy = true; renderPicks();
+    const winner = pickWinner();
+    HORSES.forEach((h, i) => { const el = $('#hrH' + i); el.style.transition = 'none'; el.style.left = '0'; el.classList.remove('win'); });
+    void track.offsetWidth;
+    const W = Math.max(60, track.clientWidth - 46);
+    const durs = HORSES.map((h, i) => i === winner ? 3.5 + Math.random() * 0.3 : 3.9 + Math.random() * 1.7);
+    const eases = ['ease-in-out', 'ease-out', 'linear', 'ease-in', 'cubic-bezier(.4,.1,.6,1)'];
+    HORSES.forEach((h, i) => { const el = $('#hrH' + i); el.style.transition = `left ${durs[i]}s ${eases[i % eases.length]}`; el.style.left = W + 'px'; });
+    Sound.play('launch');
+    let ticks = 22; const ti = setInterval(() => { Sound.play('reel'); if (--ticks <= 0) clearInterval(ti); }, 170);
+    await wait(durs[winner] * 1000 + 350); clearInterval(ti);
+    const wh = $('#hrH' + winner); if (wh) wh.classList.add('win');
+    const won = winner === pick;
+    const ret = won ? Math.round(stake * HORSES[pick].odds) : 0;
+    const net = ret - stake;
+    const res = $('#hrResult');
+    if (won) { Bank.addWinnings(ret); res.textContent = `🏆 ${HORSES[winner].n} gagne ! Vous remportez ${fmt(ret)} € (net +${fmt(net)}) !`; res.className = 'hr-result win'; Sound.play('win'); UI.coinRain(18); }
+    else { res.textContent = `${HORSES[winner].n} l'emporte. Votre ${HORSES[pick].n} termine derrière — perdu ${fmt(stake)} €.`; res.className = 'hr-result lose'; Sound.play('lose'); }
+    Bank.record(net, 'Chevaux');
+    busy = false; renderPicks();
+  };
+  const init = () => {
+    track = $('#hrTrack'); bet = makeBetControls($('#hrBetDock'), { defaultBet: 50 });
+    buildTrack(); renderPicks();
+    $('#hrPicks').addEventListener('click', (e) => { if (busy) return; const p = e.target.closest('[data-i]'); if (!p) return; pick = Number(p.dataset.i); Sound.play('chip'); renderPicks(); });
+    $('#hrRun').addEventListener('click', run);
+  };
+  const onEnter = () => { renderPicks(); };
+  return { init, onEnter };
+})();
+
+/* ======================================================================
+   11 sexdecies. BACCARAT — Joueur / Banque / Égalité, règles officielles
+   ====================================================================== */
+const Baccarat = (() => {
+  const bacVal = (c) => c.rank === 'A' ? 1 : (['10', 'J', 'Q', 'K'].includes(c.rank) ? 0 : Number(c.rank));
+  const total = (h) => h.reduce((a, c) => a + bacVal(c), 0) % 10;
+  let deck, bet, bets = {}, busy = false;
+  const renderBets = () => {
+    const opts = [['player', 'JOUEUR', 'paie 1:1'], ['banker', 'BANQUE', 'paie 0,95:1'], ['tie', 'ÉGALITÉ', 'paie 8:1']];
+    $('#bacBets').innerHTML = opts.map(([k, l, p]) => `<div class="bac-bet${bets[k] ? ' sel' : ''}" data-b="${k}">${l}<small>${p}</small>${bets[k] ? `<span class="bac-chip">${fmtShort(bets[k])}</span>` : ''}</div>`).join('');
+    $('#bacStaked').textContent = 'Mise totale : ' + fmt(Object.values(bets).reduce((a, b) => a + b, 0)) + ' €';
+  };
+  const deal = async () => {
+    if (busy) return;
+    const stake = Object.values(bets).reduce((a, b) => a + b, 0);
+    if (stake <= 0) { UI.toast('Misez sur Joueur, Banque ou Égalité.', 'lose'); return; }
+    if (Bank.balance < stake) { UI.toast('Solde insuffisant.', 'lose'); return; }
+    busy = true; $('#bacDeal').disabled = true; $('#bacClear').disabled = true;
+    Bank.placeBet(stake);
+    deck = Cards.shuffle(Cards.freshDeck());
+    const P = [], B = [], pe = $('#bacPlayer'), be = $('#bacBanker');
+    pe.innerHTML = ''; be.innerHTML = ''; $('#bacPScore').textContent = '–'; $('#bacBScore').textContent = '–';
+    const put = (hand, elm, c) => { hand.push(c); elm.appendChild(Cards.el(c)); Sound.play('card'); };
+    put(P, pe, deck.pop()); await wait(320);
+    put(B, be, deck.pop()); await wait(320);
+    put(P, pe, deck.pop()); await wait(320);
+    put(B, be, deck.pop()); await wait(320);
+    $('#bacPScore').textContent = total(P); $('#bacBScore').textContent = total(B);
+    const pt = total(P), bt = total(B), natural = pt >= 8 || bt >= 8;
+    let pThird = null;
+    if (!natural) {
+      if (pt <= 5) { const c = deck.pop(); put(P, pe, c); pThird = bacVal(c); $('#bacPScore').textContent = total(P); await wait(400); }
+      const bDraw = pThird === null ? bt <= 5
+        : bt <= 2 ? true : bt === 3 ? pThird !== 8 : bt === 4 ? (pThird >= 2 && pThird <= 7)
+        : bt === 5 ? (pThird >= 4 && pThird <= 7) : bt === 6 ? (pThird >= 6 && pThird <= 7) : false;
+      if (bDraw) { put(B, be, deck.pop()); $('#bacBScore').textContent = total(B); await wait(400); }
+    }
+    const fp = total(P), fb = total(B);
+    $('#bacPScore').textContent = fp; $('#bacBScore').textContent = fb;
+    const outcome = fp > fb ? 'player' : (fb > fp ? 'banker' : 'tie');
+    let ret = 0;
+    if (bets.player && outcome === 'player') ret += bets.player * 2;
+    if (bets.banker && outcome === 'banker') ret += Math.round(bets.banker * 1.95);
+    if (bets.tie && outcome === 'tie') ret += bets.tie * 9;
+    if (outcome === 'tie') { if (bets.player) ret += bets.player; if (bets.banker) ret += bets.banker; }   // égalité → remboursé
+    const net = ret - stake;
+    const label = outcome === 'player' ? 'JOUEUR gagne' : outcome === 'banker' ? 'BANQUE gagne' : 'ÉGALITÉ';
+    const res = $('#bacResult');
+    if (ret > 0) { Bank.addWinnings(ret); res.textContent = `${label} (${fp}–${fb}) — vous encaissez ${fmt(ret)} € (net ${net >= 0 ? '+' : ''}${fmt(net)}) !`; res.className = 'bac-result ' + (outcome === 'tie' ? 'tie' : 'win'); Sound.play(outcome === 'tie' ? 'tie' : 'win'); UI.coinRain(net > 0 ? 16 : 6); }
+    else { res.textContent = `${label} (${fp}–${fb}) — perdu ${fmt(stake)} €.`; res.className = 'bac-result lose'; Sound.play('lose'); }
+    Bank.record(net, 'Baccarat');
+    bets = {}; renderBets();
+    busy = false; $('#bacDeal').disabled = false; $('#bacClear').disabled = false;
+  };
+  const init = () => {
+    bet = makeBetControls($('#bacBetDock'), { defaultBet: 50 }); renderBets();
+    $('#bacBets').addEventListener('click', (e) => { if (busy) return; const b = e.target.closest('[data-b]'); if (!b) return; const amt = bet.read(); if (amt === null) return; const k = b.dataset.b; bets[k] = (bets[k] || 0) + amt; Sound.play('chip'); renderBets(); });
+    $('#bacClear').addEventListener('click', () => { if (busy) return; bets = {}; renderBets(); Sound.play('click'); });
+    $('#bacDeal').addEventListener('click', deal);
+  };
+  const onEnter = () => { renderBets(); };
+  return { init, onEnter };
+})();
+
+/* ======================================================================
+   11 septendecies. CRAPS — 2 dés, Pass / Don't Pass / Field, Come Out & Point
+   ====================================================================== */
+const Craps = (() => {
+  const FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+  let bet, bets = {}, busy = false, point = 0;
+  const staked = () => Object.values(bets).reduce((a, b) => a + b, 0);
+  const renderBets = () => {
+    const opts = [['pass', 'PASS LINE', '1:1'], ['dontpass', "DON'T PASS", '1:1'], ['field', 'FIELD', '2·12 → 2:1']];
+    $('#crapsBets').innerHTML = opts.map(([k, l, p]) => `<div class="craps-bet${bets[k] ? ' on' : ''}" data-b="${k}">${l}<small>${p}</small>${bets[k] ? `<span class="craps-chip">${fmtShort(bets[k])}</span>` : ''}</div>`).join('');
+    $('#crapsStaked').textContent = 'Mise sur la table : ' + fmt(staked()) + ' €';
+  };
+  const setPhase = () => { const el = $('#crapsPhase'); if (!el) return; if (point) { el.textContent = 'POINT : ' + point + ' — relancez (7 = perdu)'; el.className = 'craps-phase point'; } else { el.textContent = 'Come Out — misez puis lancez'; el.className = 'craps-phase'; } };
+  const place = (k, amt) => {
+    if (Bank.balance < amt) { UI.toast('Solde insuffisant.', 'lose'); return; }
+    if (point && (k === 'pass' || k === 'dontpass')) { UI.toast('Pas de Pass pendant un Point — misez Field.', 'lose'); return; }
+    Bank.placeBet(amt); bets[k] = (bets[k] || 0) + amt; Sound.play('chip'); renderBets();
+  };
+  const roll = async () => {
+    if (busy) return;
+    if (staked() <= 0) { UI.toast('Placez au moins une mise.', 'lose'); return; }
+    busy = true; $('#crapsRoll').disabled = true; $('#crapsClear').disabled = true;
+    const d1 = $('#crapsD1'), d2 = $('#crapsD2'); d1.classList.add('rolling'); d2.classList.add('rolling'); Sound.play('dice');
+    for (let i = 0; i < 10; i++) { d1.textContent = FACES[randInt(1, 6)]; d2.textContent = FACES[randInt(1, 6)]; await wait(80); }
+    const a = randInt(1, 6), b = randInt(1, 6), sum = a + b;
+    d1.classList.remove('rolling'); d2.classList.remove('rolling'); d1.textContent = FACES[a]; d2.textContent = FACES[b];
+    let ret = 0; const msg = [];
+    if (bets.field) { const f = bets.field; if ([3, 4, 9, 10, 11].includes(sum)) { ret += f * 2; msg.push(`Field ${sum} +${fmt(f)}`); } else if (sum === 2 || sum === 12) { ret += f * 3; msg.push(`Field ${sum} +${fmt(f * 2)} !`); } else { msg.push('Field perd'); } bets.field = 0; }
+    if (!point) {
+      if (sum === 7 || sum === 11) { if (bets.pass) { ret += bets.pass * 2; msg.push('Pass gagne'); bets.pass = 0; } if (bets.dontpass) { msg.push("Don't Pass perd"); bets.dontpass = 0; } }
+      else if (sum === 2 || sum === 3) { if (bets.pass) { msg.push('Pass perd'); bets.pass = 0; } if (bets.dontpass) { ret += bets.dontpass * 2; msg.push("Don't Pass gagne"); bets.dontpass = 0; } }
+      else if (sum === 12) { if (bets.pass) { msg.push('Pass perd'); bets.pass = 0; } if (bets.dontpass) { ret += bets.dontpass; msg.push("Don't Pass : égalité (remboursé)"); bets.dontpass = 0; } }
+      else { point = sum; msg.push('Point établi : ' + sum); }
+    } else {
+      if (sum === point) { if (bets.pass) { ret += bets.pass * 2; msg.push('Point réussi ! Pass gagne'); bets.pass = 0; } if (bets.dontpass) { msg.push("Don't Pass perd"); bets.dontpass = 0; } point = 0; }
+      else if (sum === 7) { if (bets.pass) { msg.push('Seven out — Pass perd'); bets.pass = 0; } if (bets.dontpass) { ret += bets.dontpass * 2; msg.push("Don't Pass gagne"); bets.dontpass = 0; } point = 0; }
+      else msg.push('Aucun effet — relancez');
+    }
+    if (ret > 0) { Bank.addWinnings(ret); Sound.play('win'); UI.coinRain(10); }
+    else if (msg.some((m) => /perd/.test(m))) Sound.play('lose');
+    const res = $('#crapsResult'); res.textContent = `🎲 ${sum} (${a}+${b}) — ${msg.join(' · ')}`;
+    res.className = 'craps-result ' + (ret > 0 ? 'win' : (msg.some((m) => /perd/.test(m)) ? 'lose' : ''));
+    renderBets(); setPhase();
+    busy = false; $('#crapsRoll').disabled = false; $('#crapsClear').disabled = false;
+  };
+  const init = () => {
+    bet = makeBetControls($('#crapsBetDock'), { defaultBet: 50 }); renderBets(); setPhase();
+    $('#crapsBets').addEventListener('click', (e) => { if (busy) return; const b = e.target.closest('[data-b]'); if (!b) return; const amt = bet.read(); if (amt === null) return; place(b.dataset.b, amt); });
+    $('#crapsClear').addEventListener('click', () => { if (busy || point) { if (point) UI.toast('Impossible de retirer pendant un Point.', 'lose'); return; } const r = staked(); if (r > 0) Bank.addWinnings(r); bets = {}; renderBets(); Sound.play('click'); });
+    $('#crapsRoll').addEventListener('click', roll);
+  };
+  const onEnter = () => { renderBets(); setPhase(); };
+  return { init, onEnter };
+})();
+
+/* ======================================================================
    11 nonies. MULTIJOUEUR EN LIGNE — 2 joueurs via serveur WebSocket
    ====================================================================== */
 const Multiplayer = (() => {
@@ -4154,6 +4326,9 @@ const SlotSelect = (() => {
   Social.init();
   Roulette.init();
   MoneyWheel.init();
+  HorseRace.init();
+  Baccarat.init();
+  Craps.init();
   TrustedTime.sync();                          // heure serveur (anti-triche roue)
   setInterval(() => TrustedTime.sync(), 300000); // re-synchro toutes les 5 min
   AgenceImmo.init();
@@ -4186,6 +4361,9 @@ const SlotSelect = (() => {
   Nav.register('slot', Slot.onEnter);
   Nav.register('roulette', Roulette.onEnter);
   Nav.register('moneywheel', MoneyWheel.onEnter);
+  Nav.register('horses', HorseRace.onEnter);
+  Nav.register('baccarat', Baccarat.onEnter);
+  Nav.register('craps', Craps.onEnter);
   Nav.register('profile', () => { UI.renderHistory(); UI.renderGarage(); const ac = document.getElementById('autoCard'); if (ac) ac.style.display = 'none'; });
   Nav.register('casino', () => { DailyWheel.onEnterCasino(); Auction.refreshBadge(); });
 
